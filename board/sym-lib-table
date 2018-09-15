@@ -1,0 +1,3 @@
+(sym_lib_table
+  (lib (name drv8825)(type Legacy)(uri /home/tim/Rowan/RAS/micromouse/micromouse/drv8825.lib)(options "")(descr ""))
+)
