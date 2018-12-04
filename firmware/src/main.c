@@ -1,4 +1,5 @@
 #include <avr/io.h>
+#include <avr/interrupt.h>
 #include <util/delay.h>
 #include "stepper.h"
 #include "distance.h"
@@ -14,22 +15,23 @@ int main() {
     init_left_stepper();
     init_right_stepper();
 
-    set_left_stepper(10);
-    set_right_stepper(10);
+    //set_left_stepper(10);
+    //set_right_stepper(10);
 
     init_distance();
 
-    //sei();
+    sei();
 
     unsigned char d = 0;
     unsigned int n = 0;
     while(1) {
-        _delay_ms(1000);
+        _delay_ms(10);
 
         // blink led
         PORTB ^= (1 << 5);
 
-        //set_left_direction(d);
+        set_left_direction(d);
+        set_right_direction(d);
         d = !d;
 
         unsigned int distance = get_distance();

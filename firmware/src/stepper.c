@@ -5,7 +5,7 @@ void init_left_stepper() {
 
     // set pin as output
     DDRD |= (1 << 6);
-    DDRD |= (1 << 5);
+    DDRD |= (1 << 7);
 
     // set mode to phase correct pwm, updating pin at top
     TCCR0A |= (1 << WGM00);
@@ -21,9 +21,9 @@ void init_left_stepper() {
 
 void set_left_direction(unsigned char direction) {
     if (direction) {
-        PORTD |= (1 << 5);
+        PORTD |= (1 << 7);
     } else {
-        PORTD &= ~(1 << 5);
+        PORTD &= ~(1 << 7);
     }
 }
 
@@ -51,7 +51,7 @@ void init_right_stepper() {
 
     //set pin as output
     DDRB |= (1 << 3);
-    DDRB |= (1 << 4);
+    DDRB |= (1 << 2);
 
     // set mode to phase correct pwm, updating pin at top
     TCCR2A |= (1 << WGM20);
@@ -67,9 +67,9 @@ void init_right_stepper() {
 
 void set_right_direction(unsigned char direction) {
     if (direction) {
-        PORTB |= (1 << 4);
+        PORTB |= (1 << 2);
     } else {
-        PORTB &= ~(1 << 4);
+        PORTB &= ~(1 << 2);
     }
 }
 

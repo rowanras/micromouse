@@ -4,6 +4,6 @@
 
 void init_distance();
 
-unsigned int get_distance();
+unsigned long get_distance();
 
 #endif
