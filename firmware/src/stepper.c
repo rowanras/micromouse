@@ -39,45 +39,30 @@ void stop_left_stepper() {
     TCCR0B &= ~(1 << CS02);
 }
 
-void set_left_stepper(unsigned char speed) {
+volatile unsigned int left_steps = 0;
 
-    // set clock to clk/256
-    TCCR0B &= ~(1 << CS00);
-    TCCR0B &= ~(1 << CS01);
-    TCCR0B |= (1 << CS02);
+unsigned int get_left_steps() {
+    return left_steps;
+}
+
+void set_left_stepper(unsigned char speed, unsigned int steps) {
+
+    left_steps = steps;
 
     // set compare register to generate step pulses
     // at the right speed
     OCR0A = speed;
-}
 
-volatile unsigned char *left_steps;
-
-void set_left_steps(volatile unsigned char *steps) {
-    left_steps = steps;
-
-    OCR0A = *(left_steps+1);
-    //OCR0A = 10;
-    // enable steps
     // set clock to clk/256
     TCCR0B &= ~(1 << CS00);
     TCCR0B &= ~(1 << CS01);
     TCCR0B |= (1 << CS02);
-
 }
 
 ISR(TIMER0_COMPA_vect) {
-    left_steps++;
-    if (*left_steps == 0) {
-        // disable clock
-        TCCR0B &= ~(1 << CS00);
-        TCCR0B &= ~(1 << CS01);
-        TCCR0B &= ~(1 << CS02);
-    } else {
-        // set compare register to generate step
-        // pulses at the right speed
-        OCR0A = *left_steps;
-        //OCR0A = 10;
+    left_steps--;
+    if (left_steps == 0) {
+        stop_left_stepper();
     }
 }
 
@@ -96,6 +81,8 @@ void init_right_stepper() {
     // set compare output A to toggle pin
     TCCR2A |= (1 << COM2A0);
     TCCR2A &= ~(1 << COM2A1);
+
+    TIMSK2 |= (1 << OCIE1A);
 
     //stop_right_stepper();
 }
@@ -116,19 +103,29 @@ void stop_right_stepper() {
     TCCR2B &= ~(1 << CS02);
 }
 
-void set_right_stepper(unsigned char speed) {
+volatile unsigned int right_steps = 0;
+
+unsigned int get_right_steps() {
+    return right_steps;
+}
+
+void set_right_stepper(unsigned char speed, unsigned int steps) {
+
+    right_steps = steps;
+
+    // set compare register to generate step pulses
+    // at the right speed
+    OCR2A = speed;
 
     // set clock to clk/256
     TCCR2B &= ~(1 << CS00);
     TCCR2B |= (1 << CS01);
     TCCR2B |= (1 << CS02);
-
-    // set compare register to generate step pulses
-    // at the right speed
-    OCR2A = speed;
 }
 
-void set_right_steps(unsigned char *steps) {
-
+ISR(TIMER2_COMPA_vect) {
+    right_steps--;
+    if (right_steps == 0) {
+        stop_right_stepper();
+    }
 }
-

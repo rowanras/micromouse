@@ -4,7 +4,7 @@
 #include "stepper.h"
 #include "distance.h"
 #include "uart.h"
-#include "motion.h"
+//#include "motion.h"
 
 int main() {
 
@@ -18,8 +18,8 @@ int main() {
 
     //set_left_stepper(10);
     //set_right_stepper(10);
-
-    forward();
+    set_left_stepper(10, 20000);
+    set_right_stepper(10, 10000);
 
     init_distance();
 
