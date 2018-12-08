@@ -2,8 +2,10 @@
 #ifndef DISTANCE_H
 #define DISTANCE_H
 
-void init_distance();
+#define NO_SIGNAL 99999
 
-unsigned long get_distance();
+volatile unsigned long distances[4];
+
+void init_distance();
 
 #endif

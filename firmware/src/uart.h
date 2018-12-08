@@ -9,8 +9,9 @@
 #define BAUDRATE ((F_CPU)/(16UL*BAUD)-1)
 
 void init_uart();
-void uart_send_byte(unsigned char data);
-void uart_send_bytes(unsigned char *data);
+void uart_send_byte(char data);
+void uart_send_bytes(char *data);
+void uart_send_unsigned_long(unsigned long number);
 
 #endif
 

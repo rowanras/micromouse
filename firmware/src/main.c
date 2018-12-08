@@ -4,6 +4,7 @@
 #include "stepper.h"
 #include "distance.h"
 #include "uart.h"
+#include "motion.h"
 
 int main() {
 
@@ -18,28 +19,28 @@ int main() {
     //set_left_stepper(10);
     //set_right_stepper(10);
 
+    forward();
+
     init_distance();
 
     sei();
 
-    unsigned char d = 0;
-    unsigned int n = 0;
     while(1) {
-        _delay_ms(10);
+
+        //_delay_ms(500);
 
         // blink led
         PORTB ^= (1 << 5);
 
-        set_left_direction(d);
-        set_right_direction(d);
-        d = !d;
+        for (int i = 0; i < 3; i++) {
+            unsigned int distance = distances[i];
+            uart_send_unsigned_long(distance);
+            uart_send_byte(' ');
+            uart_send_byte(distance < 2000 ? '|' : ' ');
+            uart_send_byte(' ');
+        }
 
-        unsigned int distance = get_distance();
-        char number[16];
-        itoa(distance, number, 10);
-        uart_send_bytes(number);
         uart_send_byte('\n');
     }
-
 }
 
