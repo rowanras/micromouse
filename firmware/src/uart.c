@@ -1,4 +1,5 @@
 #include <avr/io.h>
+#include <avr/interrupt.h>
 #include <util/delay.h>
 #include "uart.h"
 
@@ -11,6 +12,8 @@ void init_uart() {
 
     UCSR0C |= (1<<UCSZ00);
     UCSR0C |= (1<<UCSZ01);
+
+    UCSR0B |= (1<<RXCIE0);
 }
 
 void uart_send_byte(char data) {
@@ -39,4 +42,45 @@ void uart_send_unsigned_long(unsigned long number) {
     }
 
     uart_send_bytes(buffer);
+}
+
+char rx_line_buf[RX_LINE_BUF_LEN][RX_CHAR_BUF_LEN];
+unsigned char rx_char_buf_size = 0;
+unsigned char rx_line_buf_size = 0;
+
+unsigned char uart_lines_available() {
+    return rx_line_buf_size;
+}
+
+unsigned char uart_read_line(char *buf) {
+
+    for (unsigned char c = 0; c < RX_CHAR_BUF_LEN; c++) {
+        buf[c] = rx_line_buf[0][c];
+    }
+
+    for (unsigned char l = 1; l < RX_LINE_BUF_LEN; l++) {
+        for (unsigned char c = 0; c < RX_CHAR_BUF_LEN; c++) {
+            rx_line_buf[l-1][c] = rx_line_buf[l][c];
+        }
+    }
+
+    rx_line_buf_size -= 1;
+
+    return rx_line_buf_size;
+}
+
+ISR(USART_RX_vect) {
+    char in = UDR0;
+    if (
+        rx_char_buf_size < RX_CHAR_BUF_LEN &&
+        rx_line_buf_size < RX_LINE_BUF_LEN
+    ) {
+        rx_line_buf[rx_line_buf_size][rx_char_buf_size] = in;
+        rx_char_buf_size += 1;
+    }
+
+    if (in == '\n' && rx_line_buf_size < RX_LINE_BUF_LEN-1) {
+        rx_line_buf_size += 1;
+        rx_char_buf_size = 0;
+    }
 }
