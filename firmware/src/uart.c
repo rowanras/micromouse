@@ -80,6 +80,7 @@ ISR(USART_RX_vect) {
     }
 
     if (in == '\n' && rx_line_buf_size < RX_LINE_BUF_LEN-1) {
+        rx_line_buf[rx_line_buf_size][rx_char_buf_size] = '\0';
         rx_line_buf_size += 1;
         rx_char_buf_size = 0;
     }

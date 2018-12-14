@@ -4,7 +4,7 @@
 #include "stepper.h"
 #include "distance.h"
 #include "uart.h"
-//#include "motion.h"
+#include "motion.h"
 
 #define MAX_ARGS 8
 #define MAX_ARG_LEN 8
@@ -41,7 +41,11 @@ unsigned char string_comp(char *str1, char *str2) {
         c++;
     }
 
-    return 1;
+    if (str1[c] == str2[c]) {
+        return 1;
+    } else {
+        return 0;
+    }
 }
 
 unsigned char string_len(char * str) {
@@ -56,8 +60,10 @@ unsigned int string_to_dec(char *str) {
     unsigned int dec = 0;
 
     while (str[c] != '\0' ) {
-        dec *= 10;
-        dec += (str[c]-'0');
+        if (str[c] >= '0' && str[c] <= '9') {
+            dec *= 10;
+            dec += (str[c]-'0');
+        }
         c++;
     }
 
@@ -79,6 +85,8 @@ int main() {
 
     sei();
 
+    static unsigned char distance_report = 0;
+
     while(1) {
 
         if (uart_lines_available() > 0) {
@@ -87,7 +95,7 @@ int main() {
 
             uart_read_line(line_buf);
 
-            line_buf[8] = '\0';
+            //line_buf[RX_CHAR_BUF_LEN] = '\0';
 
             uart_send_bytes("echo: ");
             uart_send_bytes(line_buf);
@@ -95,16 +103,14 @@ int main() {
 
             char **args = split(line_buf);
 
-            /*
             for (int a = 0; a < MAX_ARGS; a++) {
                 uart_send_byte(a+'0');
                 uart_send_bytes(": ");
                 uart_send_bytes(args[a]);
                 uart_send_byte('\n');
             }
-            */
 
-            if (string_comp(args[0], "f")) {
+            if (string_comp(args[0], "forward")) {
                 unsigned int speed = string_to_dec(args[1]);
                 unsigned int distance = string_to_dec(args[2]);
 
@@ -115,7 +121,7 @@ int main() {
                 uart_send_byte('\n');
 
                 forward(speed, distance);
-            } else if (string_comp(args[0], "b")) {
+            } else if (string_comp(args[0], "backward")) {
                 unsigned int speed = string_to_dec(args[1]);
                 unsigned int distance = string_to_dec(args[2]);
 
@@ -126,7 +132,7 @@ int main() {
                 uart_send_byte('\n');
 
                 backward(speed, distance);
-            } else if (string_comp(args[0], "l")) {
+            } else if (string_comp(args[0], "left")) {
                 unsigned int speed = string_to_dec(args[1]);
                 unsigned int distance = string_to_dec(args[2]);
 
@@ -137,7 +143,7 @@ int main() {
                 uart_send_byte('\n');
 
                 left(speed, distance);
-            } else if (string_comp(args[0], "r")) {
+            } else if (string_comp(args[0], "right")) {
                 unsigned int speed = string_to_dec(args[1]);
                 unsigned int distance = string_to_dec(args[2]);
 
@@ -148,6 +154,48 @@ int main() {
                 uart_send_byte('\n');
 
                 right(speed, distance);
+            } else if (string_comp(args[0], "step_left")) {
+                unsigned int speed = string_to_dec(args[1]);
+                unsigned int distance = string_to_dec(args[2]);
+
+                uart_send_bytes("step_left\n");
+                uart_send_unsigned_long(speed);
+                uart_send_byte('\n');
+                uart_send_unsigned_long(distance);
+                uart_send_byte('\n');
+
+                set_left_stepper(speed, distance);
+            } else if (string_comp(args[0], "step_right")) {
+                unsigned int speed = string_to_dec(args[1]);
+                unsigned int distance = string_to_dec(args[2]);
+
+                uart_send_bytes("step_right\n");
+                uart_send_unsigned_long(speed);
+                uart_send_byte('\n');
+                uart_send_unsigned_long(distance);
+                uart_send_byte('\n');
+
+                set_right_stepper(speed, distance);
+            } else if (string_comp(args[0], "step_both")) {
+                unsigned int speed = string_to_dec(args[1]);
+                unsigned int distance = string_to_dec(args[2]);
+
+                uart_send_bytes("step_both\n");
+                uart_send_unsigned_long(speed);
+                uart_send_byte('\n');
+                uart_send_unsigned_long(distance);
+                uart_send_byte('\n');
+
+                set_left_stepper(speed, distance);
+                set_right_stepper(speed, distance);
+            } else if (string_comp(args[0], "distance")) {
+                if (string_comp(args[1], "on\n")) {
+                    uart_send_bytes("distance on\n");
+                    distance_report = 1;
+                } else if (string_comp(args[1], "off\n")) {
+                    uart_send_bytes("distance off\n");
+                    distance_report = 0;
+                }
             } else {
                 uart_send_bytes("not\n");
             }
@@ -158,17 +206,22 @@ int main() {
         // blink led
         PORTB ^= (1 << 5);
 
-        /*
-        for (int i = 0; i < 3; i++) {
-            unsigned int distance = distances[i];
-            uart_send_unsigned_long(distance);
-            uart_send_byte(' ');
-            uart_send_byte(distance < 2000 ? '|' : ' ');
-            uart_send_byte(' ');
-        }
+        if (distance_report) {
 
-        uart_send_byte('\n');
-        */
+            for (unsigned char i = 3; i != 0; i--) {
+                unsigned long distance = distances[i-1];
+
+                if (distance < 2000) {
+                    uart_send_bytes("-----");
+                } else {
+                    uart_send_bytes("     ");
+                }
+
+                uart_send_bytes(" | ");
+            }
+
+            uart_send_byte('\n');
+        }
     }
 }
 

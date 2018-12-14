@@ -9,7 +9,7 @@
 #define BAUD 9600
 #define BAUDRATE ((F_CPU)/(16UL*BAUD)-1)
 
-#define RX_CHAR_BUF_LEN 8
+#define RX_CHAR_BUF_LEN 32
 #define RX_LINE_BUF_LEN 8
 
 void init_uart();

@@ -1,8 +1,8 @@
 #include "stepper.h"
 #include "motion.h"
 
-#define STEPS_PER_MM 13
-#define STEPS_PER_DEGREE 11
+#define STEPS_PER_MM 24
+#define STEPS_PER_DEGREE 23
 
 void forward(unsigned char speed, unsigned int distance) {
     set_left_direction(1);
