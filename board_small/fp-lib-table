@@ -1,0 +1,4 @@
+(fp_lib_table
+  (lib (name dvr8825)(type KiCad)(uri ${KIPRJMOD}/dvr8825.pretty)(options "")(descr ""))
+  (lib (name svg2mod)(type KiCad)(uri /home/tim/Projects/svg2mod)(options "")(descr ""))
+)
