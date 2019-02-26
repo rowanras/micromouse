@@ -5,12 +5,14 @@
 extern crate panic_halt; // you can put a breakpoint on `rust_begin_unwind` to catch panics
                          // extern crate panic_abort; // requires nightly
                          // extern crate panic_itm; // logs messages over ITM; requires ITM support
-                         // extern crate panic_semihosting; // logs messages to the host stderr; requires a debugger
+                         //extern crate panic_semihosting; // logs messages to the host stderr; requires a debugger
 
 //use cortex_m::asm;
 use cortex_m_rt::entry;
 
 use stm32f4::stm32f405;
+
+mod uart;
 
 #[derive(Copy, Clone)]
 enum Direction {
@@ -113,36 +115,6 @@ fn left_encoder_setup(
 }
 */
 
-fn uart_setup(rcc: &stm32f405::RCC, uart: &stm32f405::USART1, gpioa: &stm32f405::GPIOA) {
-    // enable clock for usart
-    rcc.apb2enr.modify(|_, w| w.usart1en().set_bit());
-
-    // enable clock for gpioa
-    rcc.ahb1enr.modify(|_, w| w.gpioaen().set_bit());
-
-
-
-    // set pins to alternate function
-    gpioa.moder.modify(|_, w| w.moder9().alternate().moder10().alternate());
-
-    // set the alternate function to usart1 rx and tx
-    gpioa.afrh.modify(|_, w| w.afrh9().af7().afrh10().af7());
-
-
-
-    // set buadrate
-    uart.brr.write(|w| unsafe { w.bits(0x683) } );
-
-    // enable rx and tx
-    uart.cr1.write(|w| w.ue().set_bit().re().set_bit().te().set_bit());
-}
-
-fn uart_putc(uart: &stm32f405::USART1, c: u8) {
-    if uart.sr.read().txe().bit() == true {
-        uart.dr.write(|w| w.dr().bits(c.into()));
-    }
-}
-
 fn mco2_setup(rcc: &stm32f405::RCC, gpioc: &stm32f405::GPIOC) {
     rcc.ahb1enr.write(|w| w.gpiocen().set_bit());
     rcc.cfgr.modify(|_, w| w.mco2().sysclk());
@@ -153,6 +125,7 @@ fn mco2_setup(rcc: &stm32f405::RCC, gpioc: &stm32f405::GPIOC) {
 #[entry]
 fn main() -> ! {
     let peripherals = stm32f405::Peripherals::take().unwrap();
+    let mut core_peripherals = stm32f405::CorePeripherals::take().unwrap();
 
     peripherals
         .RCC
@@ -192,7 +165,12 @@ fn main() -> ! {
 
     mco2_setup(&peripherals.RCC, &peripherals.GPIOC);
     left_motor_setup(&peripherals.RCC, &peripherals.TIM4, &peripherals.GPIOB);
-    uart_setup(&peripherals.RCC, &peripherals.USART1, &peripherals.GPIOA);
+    uart::setup(
+        &peripherals.RCC,
+        &mut core_peripherals.NVIC,
+        peripherals.USART1,
+        &peripherals.GPIOA,
+    );
 
     let mut i = 0u64;
     let mut dir = Direction::Forward;
@@ -261,8 +239,6 @@ fn main() -> ! {
             dir = !dir;
             left_motor_change_direction(&peripherals.TIM4, dir);
         }
-
-        uart_putc(&peripherals.USART1, 0x55);
 
         let speed = if i < 25000u64 {
             (i as u32) / 5
