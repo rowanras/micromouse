@@ -1,4 +1,6 @@
 use core::cell::RefCell;
+use core::fmt;
+use core::fmt::Write;
 
 use cortex_m::interrupt::free as interrupt_free;
 use cortex_m::interrupt::CriticalSection;
@@ -15,59 +17,52 @@ static UART: Mutex<RefCell<Option<stm32f405::USART1>>> = Mutex::new(RefCell::new
 static BUFFER: Mutex<RefCell<([u8; BUFFER_LEN], usize)>> =
     Mutex::new(RefCell::new(([0; BUFFER_LEN], 0)));
 
-pub fn setup(
-    rcc: &stm32f405::RCC,
-    nvic: &mut stm32f405::NVIC,
-    uart: stm32f405::USART1,
-    gpioa: &stm32f405::GPIOA,
-) {
-    // enable clock for usart
-    rcc.apb2enr.modify(|_, w| w.usart1en().set_bit());
+pub struct Uart {}
 
-    // enable clock for gpioa
-    rcc.ahb1enr.modify(|_, w| w.gpioaen().set_bit());
+impl Uart {
+    pub fn setup(
+        rcc: &stm32f405::RCC,
+        nvic: &mut stm32f405::NVIC,
+        uart: stm32f405::USART1,
+        gpioa: &stm32f405::GPIOA,
+    ) -> Uart {
+        // enable clock for usart
+        rcc.apb2enr.modify(|_, w| w.usart1en().set_bit());
 
-    // set pins to alternate function
-    gpioa
-        .moder
-        .modify(|_, w| w.moder9().alternate().moder10().alternate());
+        // enable clock for gpioa
+        rcc.ahb1enr.modify(|_, w| w.gpioaen().set_bit());
 
-    // set the alternate function to usart1 rx and tx
-    gpioa.afrh.modify(|_, w| w.afrh9().af7().afrh10().af7());
+        // set pins to alternate function
+        gpioa
+            .moder
+            .modify(|_, w| w.moder9().alternate().moder10().alternate());
 
-    // set buadrate
-    uart.brr.write(|w| unsafe { w.bits(0x683) });
+        // set the alternate function to usart1 rx and tx
+        gpioa.afrh.modify(|_, w| w.afrh9().af7().afrh10().af7());
 
-    // enable rx and tx
-    uart.cr1.write(|w| {
-        w.ue()
-            .set_bit()
-            .re()
-            .set_bit()
-            .te()
-            .set_bit()
-            .tcie()
-            .set_bit()
-    });
+        // set buadrate
+        uart.brr.write(|w| unsafe { w.bits(0x683) });
 
-    add_byte('H' as u8);
-    add_byte('e' as u8);
-    add_byte('l' as u8);
-    add_byte('l' as u8);
-    add_byte('o' as u8);
-    add_byte('\n' as u8);
+        // enable rx and tx
+        uart.cr1.write(|w| {
+            w.ue()
+                .set_bit()
+                .re()
+                .set_bit()
+                .te()
+                .set_bit()
+                .tcie()
+                .set_bit()
+        });
 
-    add_str("World!\n");
+        interrupt_free(|cs| UART.borrow(cs).replace(Some(uart)));
 
-    add_str("⛜\n");
+        nvic.enable(interrupt::USART1);
 
-    interrupt_free(|cs| UART.borrow(cs).replace(Some(uart)));
+        Uart {}
+    }
 
-    nvic.enable(interrupt::USART1);
-}
-
-fn add_byte(c: u8) {
-    interrupt_free(|cs| {
+    fn add_byte(&self, c: u8, cs: &CriticalSection) {
         let mut buffer = BUFFER.borrow(cs).borrow_mut();
 
         if buffer.1 < BUFFER_LEN {
@@ -75,19 +70,29 @@ fn add_byte(c: u8) {
             buffer.0[len] = c as u8;
             buffer.1 += 1;
         }
-    });
+    }
+
+    pub fn add_str(&self, s: &str) {
+        interrupt_free(|cs| {
+            for &c in s.as_bytes() {
+                self.add_byte(c, cs);
+            }
+        });
+    }
 }
 
-fn add_str(s: &str) {
-    for &c in s.as_bytes() {
-        add_byte(c);
+impl Write for Uart {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        self.add_str(s);
+
+        // TODO: Should probably return Error if buffer is full
+        Ok(())
     }
 }
 
 #[isr]
 fn USART1() {
     interrupt_free(|cs| {
-
         if let Some(uart) = UART.borrow(cs).borrow().as_ref() {
             if uart.sr.read().tc().bit() {
                 let mut buffer = BUFFER.borrow(cs).borrow_mut();
@@ -95,7 +100,14 @@ fn USART1() {
                 if buffer.1 > 0 {
                     uart.dr.write(|w| w.dr().bits(buffer.0[0] as u16));
 
-                    buffer.0.rotate_left(1);
+                    for i in 1..buffer.1 {
+                        buffer.0[i-1] = buffer.0[i];
+                    }
+
+                    let len = buffer.1;
+                    buffer.0[len] = 0;
+
+                    //buffer.0.rotate_left(1);
                     buffer.1 -= 1;
                 }
                 uart.sr.write(|w| w.tc().clear_bit());
