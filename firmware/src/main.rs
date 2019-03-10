@@ -15,6 +15,7 @@ use crate::uart::Uart;
 use crate::motors::{
     Direction,
     Motor,
+    Encoder,
 };
 
 use crate::motors::left::{

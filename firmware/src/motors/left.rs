@@ -1,7 +1,10 @@
 use stm32f4::stm32f405;
 
-use crate::motors::Direction;
-use crate::motors::Motor;
+use crate::motors::{
+    Direction,
+    Motor,
+    Encoder,
+};
 
 pub struct LeftMotor {
     timer: stm32f405::TIM4,
@@ -100,8 +103,10 @@ impl LeftEncoder {
 
         LeftEncoder { timer }
     }
+}
 
-    pub fn count(&self) -> u32 {
+impl Encoder for LeftEncoder {
+    fn count(&self) -> u32 {
         self.timer.cnt.read().cnt().bits()
     }
 }

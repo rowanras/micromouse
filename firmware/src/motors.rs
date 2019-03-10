@@ -21,3 +21,7 @@ pub trait Motor {
     fn change_speed(&mut self, speed: u32);
     fn change_direction(&mut self, direction: Direction);
 }
+
+pub trait Encoder {
+    fn count(&self) -> u32;
+}
