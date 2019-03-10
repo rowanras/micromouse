@@ -17,3 +17,7 @@ impl core::ops::Not for Direction {
     }
 }
 
+pub trait Motor {
+    fn change_speed(&mut self, speed: u32);
+    fn change_direction(&mut self, direction: Direction);
+}

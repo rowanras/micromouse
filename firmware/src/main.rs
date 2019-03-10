@@ -2,11 +2,8 @@
 #![no_main]
 
 // pick a panicking behavior
-extern crate panic_halt; // you can put a breakpoint on `rust_begin_unwind` to catch panics
-                         // extern crate panic_abort; // requires nightly
-                         // extern crate panic_itm; // logs messages over ITM; requires ITM support
-                         //extern crate panic_semihosting; // logs messages to the host stderr; requires a debugger
-
+// you can put a breakpoint on `rust_begin_unwind` to catch panics
+extern crate panic_halt;
 mod uart;
 mod motors;
 
@@ -15,7 +12,11 @@ use cortex_m_rt::entry;
 use stm32f4::stm32f405;
 
 use crate::uart::Uart;
-use crate::motors::Direction;
+use crate::motors::{
+    Direction,
+    Motor,
+};
+
 use crate::motors::left::{
     LeftMotor,
     LeftEncoder,
@@ -80,7 +81,7 @@ fn main() -> ! {
 
     let mut left_motor = LeftMotor::setup(
         &peripherals.RCC,
-        &peripherals.TIM4,
+        peripherals.TIM4,
         &peripherals.GPIOB,
     );
 
@@ -158,7 +159,7 @@ fn main() -> ! {
 
         if i == 0 {
             dir = !dir;
-            left_motor.change_direction(&peripherals.TIM4, dir);
+            left_motor.change_direction(dir);
         }
 
         let speed = if i < 25000u64 {
@@ -167,7 +168,7 @@ fn main() -> ! {
             ((50000u64 - i) as u32) / 5
         };
 
-        left_motor.change_speed(&peripherals.TIM4, speed);
+        left_motor.change_speed(speed);
 
         if i % 100 == 0 {
             let count = left_encoder.count();

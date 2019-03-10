@@ -1,14 +1,17 @@
 use stm32f4::stm32f405;
 
 use crate::motors::Direction;
+use crate::motors::Motor;
 
-pub struct LeftMotor { }
+pub struct LeftMotor {
+    timer: stm32f405::TIM4,
+}
 
 impl LeftMotor {
     pub fn setup(
         rcc: &stm32f405::RCC,
-        pwm_timer: &stm32f405::TIM4,
-        pwm_gpio: &stm32f405::GPIOB,
+        timer: stm32f405::TIM4,
+        gpio: &stm32f405::GPIOB,
     ) -> LeftMotor{
         // Enable clock for gpio b
         rcc.ahb1enr.modify(|_, w| w.gpioben().set_bit());
@@ -17,20 +20,20 @@ impl LeftMotor {
         rcc.apb1enr.modify(|_, w| w.tim4en().set_bit());
 
         // Set pins to alternate function
-        pwm_gpio
+        gpio
             .moder
             .modify(|_, w| w.moder6().alternate().moder7().alternate());
 
         // Set the alternate function to timer 4 channel 1 and 2
-        pwm_gpio.afrl.modify(|_, w| w.afrl6().af2().afrl7().af2());
+        gpio.afrl.modify(|_, w| w.afrl6().af2().afrl7().af2());
 
         // setup the timer
-        pwm_timer.psc.write(|w| unsafe { w.psc().bits(10u16) });
-        pwm_timer.cr1.write(|w| w.arpe().set_bit());
-        pwm_timer.arr.write(|w| w.arr().bits(10000u32));
-        pwm_timer.ccr1.write(|w| w.ccr1().bits(5000u32));
-        pwm_timer.ccr2.write(|w| w.ccr2().bits(5000u32));
-        pwm_timer.ccmr1_output.write(|w| unsafe {
+        timer.psc.write(|w| unsafe { w.psc().bits(10u16) });
+        timer.cr1.write(|w| w.arpe().set_bit());
+        timer.arr.write(|w| w.arr().bits(10000u32));
+        timer.ccr1.write(|w| w.ccr1().bits(5000u32));
+        timer.ccr2.write(|w| w.ccr2().bits(5000u32));
+        timer.ccmr1_output.write(|w| unsafe {
             w.oc1m()
                 .bits(0b110)
                 .oc1pe()
@@ -40,26 +43,29 @@ impl LeftMotor {
                 .oc2pe()
                 .set_bit()
         });
-        pwm_timer.egr.write(|w| w.ug().set_bit());
-        pwm_timer
+        timer.egr.write(|w| w.ug().set_bit());
+        timer
             .ccer
             .write(|w| w.cc1e().set_bit().cc2e().clear_bit());
-        pwm_timer.cr1.modify(|_, w| w.cen().set_bit());
+        timer.cr1.modify(|_, w| w.cen().set_bit());
 
-        LeftMotor {}
+        LeftMotor { timer }
     }
 
-    pub fn change_speed(&mut self, pwm_timer: &stm32f405::TIM4, speed: u32) {
-        pwm_timer.ccr1.write(|w| w.ccr1().bits(speed));
-        pwm_timer.ccr2.write(|w| w.ccr2().bits(speed));
+}
+
+impl Motor for LeftMotor {
+    fn change_speed(&mut self, speed: u32) {
+        self.timer.ccr1.write(|w| w.ccr1().bits(speed));
+        self.timer.ccr2.write(|w| w.ccr2().bits(speed));
     }
 
-    pub fn change_direction(&mut self, pwm_timer: &stm32f405::TIM4, direction: Direction) {
+    fn change_direction(&mut self, direction: Direction) {
         match direction {
-            Direction::Forward => pwm_timer
+            Direction::Forward => self.timer
                 .ccer
                 .write(|w| w.cc1e().set_bit().cc2e().clear_bit()),
-            Direction::Backward => pwm_timer
+            Direction::Backward => self.timer
                 .ccer
                 .write(|w| w.cc1e().clear_bit().cc2e().set_bit()),
         }
