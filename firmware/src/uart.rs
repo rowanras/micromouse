@@ -13,11 +13,15 @@ use stm32f4::stm32f405::interrupt;
 
 const BUFFER_LEN: usize = 64;
 
-static UART: Mutex<RefCell<Option<stm32f405::USART1>>> = Mutex::new(RefCell::new(None));
-static BUFFER: Mutex<RefCell<([u8; BUFFER_LEN], usize)>> =
-    Mutex::new(RefCell::new(([0; BUFFER_LEN], 0)));
+//static UART: Mutex<RefCell<Option<stm32f405::USART1>>> = Mutex::new(RefCell::new(None));
+//static BUFFER: Mutex<RefCell<([u8; BUFFER_LEN], usize)>> =
+    //Mutex::new(RefCell::new(([0; BUFFER_LEN], 0)));
 
-pub struct Uart {}
+pub struct Uart {
+    uart: stm32f405::USART1,
+    buffer: [u8; BUFFER_LEN],
+    length: usize,
+}
 
 impl Uart {
     pub fn setup(
@@ -51,33 +55,47 @@ impl Uart {
                 .set_bit()
                 .te()
                 .set_bit()
-                .tcie()
-                .set_bit()
+                //.tcie()
+                //.set_bit()
         });
 
-        interrupt_free(|cs| UART.borrow(cs).replace(Some(uart)));
+        //interrupt_free(|cs| UART.borrow(cs).replace(Some(uart)));
 
-        nvic.enable(interrupt::USART1);
+        //nvic.enable(interrupt::USART1);
 
-        Uart {}
-    }
-
-    fn add_byte(&self, c: u8, cs: &CriticalSection) {
-        let mut buffer = BUFFER.borrow(cs).borrow_mut();
-
-        if buffer.1 < BUFFER_LEN {
-            let len = buffer.1;
-            buffer.0[len] = c as u8;
-            buffer.1 += 1;
+        Uart {
+            uart,
+            buffer: [0; BUFFER_LEN],
+            length: 0,
         }
     }
 
-    pub fn add_str(&self, s: &str) {
-        interrupt_free(|cs| {
-            for &c in s.as_bytes() {
-                self.add_byte(c, cs);
+    fn add_byte(&mut self, c: u8) {
+        if self.length < BUFFER_LEN {
+            self.buffer[self.length] = c;
+            self.length += 1;
+        }
+    }
+
+    pub fn add_str(&mut self, s: &str) {
+        for &c in s.as_bytes() {
+            self.add_byte(c);
+        }
+    }
+
+    pub fn flush(&mut self) {
+        while self.length > 0 {
+            if self.uart.sr.read().txe().bit_is_set() {
+                self.uart.dr.write(|w| w.dr().bits(self.buffer[0] as u16));
+
+                for i in 1..self.length {
+                    self.buffer[i-1] = self.buffer[i];
+                }
+
+                self.length -= 1;
+                self.buffer[self.length] = 0;
             }
-        });
+        }
     }
 }
 
@@ -90,6 +108,7 @@ impl Write for Uart {
     }
 }
 
+/*
 #[isr]
 fn USART1() {
     interrupt_free(|cs| {
@@ -115,3 +134,4 @@ fn USART1() {
         }
     });
 }
+*/

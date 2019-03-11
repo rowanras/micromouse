@@ -10,6 +10,7 @@ set backtrace limit 32
 break DefaultHandler
 break HardFault
 break rust_begin_unwind
+#break core::panicking::panic
 
 # *try* to stop at the user entry point (it might be gone due to inlining)
 break main
