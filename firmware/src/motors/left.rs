@@ -1,41 +1,39 @@
+use core::i32;
+
 use stm32f4::stm32f405;
 
-use crate::motors::{
-    Direction,
-    Motor,
-    Encoder,
-};
+use crate::motors::{Encoder, Motor};
 
 pub struct LeftMotor {
-    timer: stm32f405::TIM4,
+    timer: stm32f405::TIM3,
 }
 
 impl LeftMotor {
     pub fn setup(
         rcc: &stm32f405::RCC,
-        timer: stm32f405::TIM4,
-        gpio: &stm32f405::GPIOB,
-    ) -> LeftMotor{
-        // Enable clock for gpio b
-        rcc.ahb1enr.modify(|_, w| w.gpioben().set_bit());
+        timer: stm32f405::TIM3,
+        gpio: &stm32f405::GPIOA,
+    ) -> LeftMotor {
+        // Enable clock for gpio a
+        rcc.ahb1enr.modify(|_, w| w.gpioaen().set_bit());
 
-        // Enable clock for timer 4
-        rcc.apb1enr.modify(|_, w| w.tim4en().set_bit());
+        // Enable clock for timer 3
+        rcc.apb1enr.modify(|_, w| w.tim3en().set_bit());
 
         // Set pins to alternate function
-        gpio
-            .moder
-            .modify(|_, w| w.moder6().alternate().moder7().alternate());
+        gpio.moder.modify(|_, w| {
+            w.moder6().alternate().moder7().alternate()
+        });
 
-        // Set the alternate function to timer 4 channel 1 and 2
+        // Set the alternate function to timer 3 channel 1 and 2
         gpio.afrl.modify(|_, w| w.afrl6().af2().afrl7().af2());
 
         // setup the timer
         timer.psc.write(|w| unsafe { w.psc().bits(10u16) });
         timer.cr1.write(|w| w.arpe().set_bit());
         timer.arr.write(|w| w.arr().bits(10000u32));
-        timer.ccr1.write(|w| w.ccr1().bits(5000u32));
-        timer.ccr2.write(|w| w.ccr2().bits(5000u32));
+        timer.ccr1.write(|w| w.ccr1().bits(0u32));
+        timer.ccr2.write(|w| w.ccr2().bits(0u32));
         timer.ccmr1_output.write(|w| unsafe {
             w.oc1m()
                 .bits(0b110)
@@ -46,32 +44,28 @@ impl LeftMotor {
                 .oc2pe()
                 .set_bit()
         });
-        timer.egr.write(|w| w.ug().set_bit());
-        timer
-            .ccer
-            .write(|w| w.cc1e().set_bit().cc2e().clear_bit());
+        //timer.egr.write(|w| w.ug().set_bit());
+        timer.ccer.write(|w| w.cc1e().clear_bit().cc2e().set_bit());
         timer.cr1.modify(|_, w| w.cen().set_bit());
 
         LeftMotor { timer }
     }
-
 }
 
 impl Motor for LeftMotor {
-    fn change_speed(&mut self, speed: u32) {
+    fn change_velocity(&mut self, velocity: i32) {
+        let speed = velocity.abs() as u32;
+
         self.timer.ccr1.write(|w| w.ccr1().bits(speed));
         self.timer.ccr2.write(|w| w.ccr2().bits(speed));
-    }
 
-    fn change_direction(&mut self, direction: Direction) {
-        match direction {
-            Direction::Forward => self.timer
-                .ccer
-                .write(|w| w.cc1e().set_bit().cc2e().clear_bit()),
-            Direction::Backward => self.timer
-                .ccer
-                .write(|w| w.cc1e().clear_bit().cc2e().set_bit()),
-        }
+        self.timer.ccer.write(|w| {
+            if velocity > 0 {
+                w.cc1e().clear_bit().cc2e().set_bit()
+            } else {
+                w.cc1e().set_bit().cc2e().clear_bit()
+            }
+        });
     }
 }
 
@@ -96,7 +90,9 @@ impl LeftEncoder {
         gpioa.afrl.modify(|_, w| w.afrl5().af1());
         gpiob.afrl.modify(|_, w| w.afrl3().af1());
 
-        timer.ccmr1_output.write(|w| unsafe { w.cc1s().bits(0b01).cc2s().bits(0b01) });
+        timer.ccmr1_output.write(|w| unsafe {
+            w.cc1s().bits(0b01).cc2s().bits(0b01)
+        });
         timer.smcr.write(|w| unsafe { w.sms().bits(0b011) });
         timer.ccer.write(|w| w.cc1e().set_bit().cc2e().set_bit());
         timer.cr1.write(|w| w.cen().set_bit());
@@ -106,7 +102,7 @@ impl LeftEncoder {
 }
 
 impl Encoder for LeftEncoder {
-    fn count(&self) -> u32 {
-        self.timer.cnt.read().cnt().bits()
+    fn count(&self) -> i32 {
+        self.timer.cnt.read().cnt().bits() as i32
     }
 }

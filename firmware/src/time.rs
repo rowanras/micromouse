@@ -1,6 +1,4 @@
-
 use stm32f4::stm32f405;
-
 
 static OVERFLOW_VALUE: u32 = 65535;
 
@@ -11,7 +9,10 @@ pub struct Time {
 }
 
 impl Time {
-    pub fn setup(rcc: &stm32f405::RCC, timer: stm32f405::TIM1) -> Time {
+    pub fn setup(
+        rcc: &stm32f405::RCC,
+        timer: stm32f405::TIM1,
+    ) -> Time {
         // Enable clock for timer 4
         rcc.apb2enr.modify(|_, w| w.tim1en().set_bit());
 
@@ -24,7 +25,6 @@ impl Time {
             last_time: 0,
             overflows: 0,
         }
-
     }
 
     pub fn now(&mut self) -> u32 {
@@ -39,4 +39,3 @@ impl Time {
         current_time + self.overflows * OVERFLOW_VALUE
     }
 }
-

@@ -1,21 +1,13 @@
-use core::cell::RefCell;
 use core::fmt;
 use core::fmt::Write;
 
-use cortex_m::interrupt::free as interrupt_free;
-use cortex_m::interrupt::CriticalSection;
-use cortex_m::interrupt::Mutex;
-
-use cortex_m_rt::interrupt as isr;
-
 use stm32f4::stm32f405;
-use stm32f4::stm32f405::interrupt;
 
 const BUFFER_LEN: usize = 64;
 
 //static UART: Mutex<RefCell<Option<stm32f405::USART1>>> = Mutex::new(RefCell::new(None));
 //static BUFFER: Mutex<RefCell<([u8; BUFFER_LEN], usize)>> =
-    //Mutex::new(RefCell::new(([0; BUFFER_LEN], 0)));
+//Mutex::new(RefCell::new(([0; BUFFER_LEN], 0)));
 
 pub struct Uart {
     uart: stm32f405::USART1,
@@ -26,7 +18,6 @@ pub struct Uart {
 impl Uart {
     pub fn setup(
         rcc: &stm32f405::RCC,
-        nvic: &mut stm32f405::NVIC,
         uart: stm32f405::USART1,
         gpioa: &stm32f405::GPIOA,
     ) -> Uart {
@@ -37,9 +28,9 @@ impl Uart {
         rcc.ahb1enr.modify(|_, w| w.gpioaen().set_bit());
 
         // set pins to alternate function
-        gpioa
-            .moder
-            .modify(|_, w| w.moder9().alternate().moder10().alternate());
+        gpioa.moder.modify(|_, w| {
+            w.moder9().alternate().moder10().alternate()
+        });
 
         // set the alternate function to usart1 rx and tx
         gpioa.afrh.modify(|_, w| w.afrh9().af7().afrh10().af7());
@@ -49,14 +40,9 @@ impl Uart {
 
         // enable rx and tx
         uart.cr1.write(|w| {
-            w.ue()
-                .set_bit()
-                .re()
-                .set_bit()
-                .te()
-                .set_bit()
-                //.tcie()
-                //.set_bit()
+            w.ue().set_bit().re().set_bit().te().set_bit()
+            //.tcie()
+            //.set_bit()
         });
 
         //interrupt_free(|cs| UART.borrow(cs).replace(Some(uart)));
@@ -86,10 +72,12 @@ impl Uart {
     pub fn flush(&mut self) {
         while self.length > 0 {
             if self.uart.sr.read().txe().bit_is_set() {
-                self.uart.dr.write(|w| w.dr().bits(self.buffer[0] as u16));
+                self.uart
+                    .dr
+                    .write(|w| w.dr().bits(self.buffer[0] as u16));
 
                 for i in 1..self.length {
-                    self.buffer[i-1] = self.buffer[i];
+                    self.buffer[i - 1] = self.buffer[i];
                 }
 
                 self.length -= 1;
