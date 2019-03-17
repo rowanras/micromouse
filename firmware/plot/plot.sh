@@ -2,7 +2,7 @@
 
 
 tail -f $1 | cat -n > data &
-gnuplot plot.gnuplot
+gnuplot $2.gnuplot
 
 trap 'kill $(jobs -p)' EXIT
 
