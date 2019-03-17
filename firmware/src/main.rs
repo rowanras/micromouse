@@ -4,6 +4,8 @@
 // pick a panicking behavior
 // you can put a breakpoint on `rust_begin_unwind` to catch panics
 extern crate panic_halt;
+
+mod battery;
 mod motors;
 mod time;
 mod uart;
@@ -12,14 +14,15 @@ use core::fmt::Write;
 use cortex_m_rt::entry;
 use stm32f4::stm32f405;
 
+use crate::battery::Battery;
 use crate::time::Time;
 use crate::uart::Uart;
 
-use crate::motors::Motor;
-use crate::motors::Encoder;
+use crate::motors::control::MotorControl;
 use crate::motors::left::{LeftEncoder, LeftMotor};
 use crate::motors::right::{RightEncoder, RightMotor};
-use crate::motors::control::MotorControl;
+use crate::motors::Encoder;
+use crate::motors::Motor;
 
 fn mco2_setup(rcc: &stm32f405::RCC, gpioc: &stm32f405::GPIOC) {
     rcc.ahb1enr.write(|w| w.gpiocen().set_bit());
@@ -43,7 +46,7 @@ fn main() -> ! {
     //.odr
     //.write(|w| w.odr6().clear_bit().odr7().set_bit());
 
-    peripherals.GPIOB.moder.write(|w| {
+    peripherals.GPIOB.moder.modify(|_, w| {
         w.moder12()
             .output()
             .moder13()
@@ -56,18 +59,21 @@ fn main() -> ! {
 
     peripherals.GPIOB.odr.write(|w| {
         w.odr12()
-            .set_bit()
+            .clear_bit()
             .odr13()
-            .set_bit()
+            .clear_bit()
             .odr14()
-            .set_bit()
+            .clear_bit()
             .odr15()
-            .set_bit()
+            .clear_bit()
     });
 
     //mco2_setup(&peripherals.RCC, &peripherals.GPIOC);
 
     let mut time = Time::setup(&peripherals.RCC, peripherals.TIM1);
+
+    let mut battery =
+        Battery::setup(&peripherals.RCC, &peripherals.GPIOB, peripherals.ADC1);
 
     let mut uart = Uart::setup(
         &peripherals.RCC,
@@ -122,11 +128,16 @@ fn main() -> ! {
         let now: u32 = time.now();
 
         if now - last_time >= 1000u32 {
-            writeln!(uart, "{}\t{}\t{}",
-                     left_control.position(),
-                     left_control.error(),
-                     left_control.target(),
-                     );
+            writeln!(
+                uart,
+                "{}\t{}\t{}\t{}\t{}\t{}",
+                now,
+                left_control.position(),
+                left_control.error(),
+                left_control.target(),
+                battery.raw(),
+                battery.is_dead(),
+            );
 
             if on {
                 peripherals
@@ -146,6 +157,7 @@ fn main() -> ! {
         }
 
         left_control.update(now);
+        battery.update(now);
         uart.flush();
     }
 }

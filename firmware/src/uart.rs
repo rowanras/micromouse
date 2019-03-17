@@ -5,10 +5,6 @@ use stm32f4::stm32f405;
 
 const BUFFER_LEN: usize = 64;
 
-//static UART: Mutex<RefCell<Option<stm32f405::USART1>>> = Mutex::new(RefCell::new(None));
-//static BUFFER: Mutex<RefCell<([u8; BUFFER_LEN], usize)>> =
-//Mutex::new(RefCell::new(([0; BUFFER_LEN], 0)));
-
 pub struct Uart {
     uart: stm32f405::USART1,
     buffer: [u8; BUFFER_LEN],
@@ -44,10 +40,6 @@ impl Uart {
             //.tcie()
             //.set_bit()
         });
-
-        //interrupt_free(|cs| UART.borrow(cs).replace(Some(uart)));
-
-        //nvic.enable(interrupt::USART1);
 
         Uart {
             uart,
@@ -95,31 +87,3 @@ impl Write for Uart {
         Ok(())
     }
 }
-
-/*
-#[isr]
-fn USART1() {
-    interrupt_free(|cs| {
-        if let Some(uart) = UART.borrow(cs).borrow().as_ref() {
-            if uart.sr.read().tc().bit() {
-                let mut buffer = BUFFER.borrow(cs).borrow_mut();
-
-                if buffer.1 > 0 {
-                    uart.dr.write(|w| w.dr().bits(buffer.0[0] as u16));
-
-                    for i in 1..buffer.1 {
-                        buffer.0[i-1] = buffer.0[i];
-                    }
-
-                    let len = buffer.1;
-                    buffer.0[len] = 0;
-
-                    //buffer.0.rotate_left(1);
-                    buffer.1 -= 1;
-                }
-                uart.sr.write(|w| w.tc().clear_bit());
-            }
-        }
-    });
-}
-*/
