@@ -106,19 +106,50 @@ fn main() -> ! {
         peripherals.TIM5,
     );
 
+    let accelerate = |time: u32| {
+            let t = (time % 240000) as u64;
+
+            let position = match t {
+                0..=40000 => (t*t)/320000,
+                40000..=80000 => 10000 - ((t-80000)*(t-80000))/320000,
+                80000..=120000 => 10000,
+                120000..=160000 => 10000 - ((t-120000)*(t-120000))/320000,
+                160000..=200000 => ((t-200000)*(t-200000))/320000,
+                200000..=240000 => 0,
+                _ => 0,
+            };
+
+            position as i32
+        };
+
+    let slow_speed = |time: u32| -((time / 100) as i32);
+
     let mut left_control = MotorControl::new(
-        75.0,
-        0.0,
-        50000.0,
-        |t| 10000,
+        20.0,
+        0.00002,
+        26000.0,
+        300,
+        accelerate,
         left_motor,
         left_encoder,
     );
 
+    let mut right_control = MotorControl::new(
+        20.0,
+        0.00002,
+        26000.0,
+        300,
+        accelerate,
+        right_motor,
+        right_encoder,
+    );
+
+
     //right_motor.change_velocity(500);
     //left_motor.change_velocity(-1000);
 
-    writeln!(uart, "Initialized!");
+    writeln!(uart, "");
+    writeln!(uart, "start");
     uart.flush();
 
     let mut last_time: u32 = 0;
@@ -130,11 +161,12 @@ fn main() -> ! {
         if now - last_time >= 1000u32 {
             writeln!(
                 uart,
-                "{}\t{}\t{}\t{}\t{}\t{}",
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}",
                 now,
                 left_control.position(),
                 left_control.error(),
                 left_control.target(),
+                left_control.motor_velocity(),
                 battery.raw(),
                 battery.is_dead(),
             );
@@ -157,6 +189,7 @@ fn main() -> ! {
         }
 
         left_control.update(now);
+        right_control.update(now);
         battery.update(now);
         uart.flush();
     }

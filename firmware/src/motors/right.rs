@@ -2,6 +2,9 @@ use stm32f4::stm32f405;
 
 use crate::motors::{Encoder, Motor};
 
+const FORWARD_DEADBAND: i32 = 500;
+const BACKWARD_DEADBAND: i32 = 500;
+
 pub struct RightMotor {
     timer: stm32f405::TIM4,
 }
@@ -52,15 +55,16 @@ impl RightMotor {
 
 impl Motor for RightMotor {
     fn change_velocity(&mut self, velocity: i32) {
-        let speed = velocity.abs() as u32;
-
-        self.timer.ccr1.write(|w| w.ccr1().bits(speed));
-        self.timer.ccr2.write(|w| w.ccr2().bits(speed));
-
         self.timer.ccer.write(|w| {
             if velocity > 0 {
+                let speed = (velocity.abs() + FORWARD_DEADBAND) as u32;
+                self.timer.ccr1.write(|w| w.ccr1().bits(speed));
+                self.timer.ccr2.write(|w| w.ccr2().bits(speed));
                 w.cc1e().clear_bit().cc2e().set_bit()
             } else {
+                let speed = (velocity.abs() + BACKWARD_DEADBAND) as u32;
+                self.timer.ccr1.write(|w| w.ccr1().bits(speed));
+                self.timer.ccr2.write(|w| w.ccr2().bits(speed));
                 w.cc1e().set_bit().cc2e().clear_bit()
             }
         });
