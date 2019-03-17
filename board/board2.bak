@@ -1898,7 +1898,7 @@ U 1 1 5C5F71BE
 P 2050 1600
 F 0 "D5" V 2004 1679 50  0000 L CNN
 F 1 "D_Zener" V 2095 1679 50  0000 L CNN
-F 2 "Diode_SMD:D_0603_1608Metric" H 2050 1600 50  0001 C CNN
+F 2 "Diode_THT:D_T-1_P2.54mm_Vertical_AnodeUp" H 2050 1600 50  0001 C CNN
 F 3 "~" H 2050 1600 50  0001 C CNN
 	1    2050 1600
 	0    1    1    0   
@@ -2034,17 +2034,6 @@ Wire Wire Line
 	9950 2250 10400 2250
 Wire Wire Line
 	10400 2350 10000 2350
-$Comp
-L Connector_Generic:Conn_02x08_Odd_Even J?
-U 1 1 5C5DCBAA
-P 8300 3250
-F 0 "J?" H 8350 3767 50  0000 C CNN
-F 1 "EXP" H 8350 3676 50  0000 C CNN
-F 2 "" H 8300 3250 50  0001 C CNN
-F 3 "~" H 8300 3250 50  0001 C CNN
-	1    8300 3250
-	1    0    0    -1  
-$EndComp
 Text Label 6750 3000 2    50   ~ 0
 PA2
 Text Label 6750 3100 2    50   ~ 0
@@ -2097,48 +2086,31 @@ Wire Wire Line
 	6550 3100 6750 3100
 Wire Wire Line
 	6750 3200 6550 3200
-Text Label 8800 3050 2    50   ~ 0
-PA2
-Text Label 8800 3150 2    50   ~ 0
+Text Label 8800 3350 2    50   ~ 0
 PA3
-Text Label 8800 3250 2    50   ~ 0
-PA4
-Text Label 8800 3450 2    50   ~ 0
-PB0
-Text Label 8800 3550 2    50   ~ 0
-PB4
-Text Label 8800 3650 2    50   ~ 0
-PB5
-Text Label 7850 3550 0    50   ~ 0
-PC15
-Text Label 7850 3450 0    50   ~ 0
-PC14
 Text Label 7850 3350 0    50   ~ 0
-PC13
+PA4
 Text Label 7850 3250 0    50   ~ 0
+PB0
+Text Label 7850 3450 0    50   ~ 0
+PB4
+Text Label 8800 3450 2    50   ~ 0
+PB5
+Text Label 8800 3250 2    50   ~ 0
+PC15
+Text Label 8800 3150 2    50   ~ 0
+PC14
+Text Label 8800 3050 2    50   ~ 0
+PC13
+Text Label 7850 3050 0    50   ~ 0
 PC8
 Text Label 7850 3150 0    50   ~ 0
 PC7
-Text Label 7850 3050 0    50   ~ 0
-PD2
-Text Label 8800 3350 2    50   ~ 0
-PA15
 $Comp
-L power:GNDD #PWR?
-U 1 1 5C6FB1A4
-P 8050 3700
-F 0 "#PWR?" H 8050 3450 50  0001 C CNN
-F 1 "GNDD" H 8054 3545 50  0000 C CNN
-F 2 "" H 8050 3700 50  0001 C CNN
-F 3 "" H 8050 3700 50  0001 C CNN
-	1    8050 3700
-	1    0    0    -1  
-$EndComp
-$Comp
-L power:+3.3V #PWR?
+L power:+3.3V #PWR0131
 U 1 1 5C6FB475
 P 7900 2900
-F 0 "#PWR?" H 7900 2750 50  0001 C CNN
+F 0 "#PWR0131" H 7900 2750 50  0001 C CNN
 F 1 "+3.3V" H 7915 3073 50  0000 C CNN
 F 2 "" H 7900 2900 50  0001 C CNN
 F 3 "" H 7900 2900 50  0001 C CNN
@@ -2160,16 +2132,6 @@ Wire Wire Line
 Wire Wire Line
 	7850 3450 8100 3450
 Wire Wire Line
-	8100 3550 7850 3550
-Wire Wire Line
-	8050 3700 8050 3650
-Wire Wire Line
-	8050 3650 8100 3650
-Wire Wire Line
-	8600 3650 8800 3650
-Wire Wire Line
-	8800 3550 8600 3550
-Wire Wire Line
 	8600 3450 8800 3450
 Wire Wire Line
 	8800 3350 8600 3350
@@ -2180,10 +2142,10 @@ Wire Wire Line
 Wire Wire Line
 	8600 3050 8800 3050
 $Comp
-L power:GNDD #PWR?
+L power:GNDD #PWR0140
 U 1 1 5C8808B8
 P 8900 3000
-F 0 "#PWR?" H 8900 2750 50  0001 C CNN
+F 0 "#PWR0140" H 8900 2750 50  0001 C CNN
 F 1 "GNDD" H 8904 2845 50  0000 C CNN
 F 2 "" H 8900 3000 50  0001 C CNN
 F 3 "" H 8900 3000 50  0001 C CNN
@@ -2194,4 +2156,15 @@ Wire Wire Line
 	8900 3000 8900 2950
 Wire Wire Line
 	8900 2950 8600 2950
+$Comp
+L Connector_Generic:Conn_02x06_Odd_Even J?
+U 1 1 5C89C302
+P 8300 3150
+F 0 "J?" H 8350 3567 50  0000 C CNN
+F 1 "Conn_02x06_Odd_Even" H 8350 3476 50  0000 C CNN
+F 2 "" H 8300 3150 50  0001 C CNN
+F 3 "~" H 8300 3150 50  0001 C CNN
+	1    8300 3150
+	1    0    0    -1  
+$EndComp
 $EndSCHEMATC
