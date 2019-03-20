@@ -7,22 +7,28 @@ extern crate panic_halt;
 
 mod battery;
 mod motors;
+mod plan;
 mod time;
 mod uart;
 
 use core::fmt::Write;
+use core::str;
 use cortex_m_rt::entry;
 use stm32f4::stm32f405;
 
+use ignore_result::Ignore;
+
 use crate::battery::Battery;
 use crate::time::Time;
+
+use crate::uart::Command;
 use crate::uart::Uart;
 
 use crate::motors::control::MotorControl;
 use crate::motors::left::{LeftEncoder, LeftMotor};
 use crate::motors::right::{RightEncoder, RightMotor};
-use crate::motors::Encoder;
-use crate::motors::Motor;
+
+use crate::plan::Plan;
 
 fn mco2_setup(rcc: &stm32f405::RCC, gpioc: &stm32f405::GPIOC) {
     rcc.ahb1enr.write(|w| w.gpiocen().set_bit());
@@ -34,6 +40,7 @@ fn mco2_setup(rcc: &stm32f405::RCC, gpioc: &stm32f405::GPIOC) {
 #[entry]
 fn main() -> ! {
     let peripherals = stm32f405::Peripherals::take().unwrap();
+    let mut core_peripherals = stm32f405::CorePeripherals::take().unwrap();
 
     peripherals.RCC.ahb1enr.write(|w| w.gpioben().set_bit());
 
@@ -77,11 +84,12 @@ fn main() -> ! {
 
     let mut uart = Uart::setup(
         &peripherals.RCC,
+        &mut core_peripherals.NVIC,
         peripherals.USART1,
         &peripherals.GPIOA,
     );
 
-    let mut left_motor = LeftMotor::setup(
+    let left_motor = LeftMotor::setup(
         &peripherals.RCC,
         peripherals.TIM3,
         &peripherals.GPIOA,
@@ -94,7 +102,7 @@ fn main() -> ! {
         peripherals.TIM2,
     );
 
-    let mut right_motor = RightMotor::setup(
+    let right_motor = RightMotor::setup(
         &peripherals.RCC,
         peripherals.TIM4,
         &peripherals.GPIOB,
@@ -106,91 +114,98 @@ fn main() -> ! {
         peripherals.TIM5,
     );
 
-    let accelerate = |time: u32| {
-            let t = (time % 240000) as u64;
-
-            let position = match t {
-                0..=40000 => (t*t)/320000,
-                40000..=80000 => 10000 - ((t-80000)*(t-80000))/320000,
-                80000..=120000 => 10000,
-                120000..=160000 => 10000 - ((t-120000)*(t-120000))/320000,
-                160000..=200000 => ((t-200000)*(t-200000))/320000,
-                200000..=240000 => 0,
-                _ => 0,
-            };
-
-            position as i32
-        };
-
-    let slow_speed = |time: u32| -((time / 100) as i32);
-
-    let mut left_control = MotorControl::new(
-        20.0,
-        0.00002,
-        26000.0,
-        300,
-        accelerate,
+    let left_control = MotorControl::new(
+        1.0,
+        0.00000,
+        0.0,
+        30,
         left_motor,
         left_encoder,
+        "left",
     );
 
-    let mut right_control = MotorControl::new(
-        20.0,
-        0.00002,
-        26000.0,
-        300,
-        accelerate,
+    let right_control = MotorControl::new(
+        1.0,
+        0.00000,
+        00000.0,
+        30,
         right_motor,
         right_encoder,
+        "right",
     );
 
+    let mut plan = Plan::new(right_control, left_control, 100, "plan");
 
-    //right_motor.change_velocity(500);
-    //left_motor.change_velocity(-1000);
-
-    writeln!(uart, "");
-    writeln!(uart, "start");
-    uart.flush();
+    writeln!(uart, "").ignore();
+    writeln!(uart, "start").ignore();
+    uart.flush_tx(&mut time, 1000);
 
     let mut last_time: u32 = 0;
     let mut on = false;
 
+    let mut report = true;
+
     loop {
         let now: u32 = time.now();
 
-        if now - last_time >= 1000u32 {
-            writeln!(
-                uart,
-                "{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                now,
-                left_control.position(),
-                left_control.error(),
-                left_control.target(),
-                left_control.motor_velocity(),
-                battery.raw(),
-                battery.is_dead(),
-            );
+        if let Some(line) = uart.read_line() {
+            if let Ok(string) = str::from_utf8(&line) {
+                let string = string.trim_matches(|c| c as u8 == 0).trim();
+                writeln!(uart, ">> {}", string).ignore();
+                if string.starts_with('!') {
+                    writeln!(uart, "Stopping report").ignore();
+                    report = false;
+                } else if string.starts_with('@') {
+                    writeln!(uart, "Starting report").ignore();
+                    report = true;
+                } else {
+                    let mut args = string.split_whitespace();
+
+                    let command = args.next();
+
+                    if command == Some(plan.keyword_command()) {
+                        plan.handle_command(&mut uart, args);
+                    } else {
+                        writeln!(uart, "Invalid Command!").ignore();
+                    }
+                }
+            }
+        }
+
+        plan.update(now);
+
+        if now - last_time >= 100u32 {
+            if report {
+                writeln!(
+                    uart,
+                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                    now,
+                    plan.left_control().position(),
+                    plan.left_control().error(),
+                    plan.left_control().target(),
+                    plan.left_control().motor_velocity(),
+                    plan.linear_acceleration(),
+                    plan.linear_velocity(),
+                    plan.linear_position(),
+                    plan.delta_time(),
+                    battery.raw(),
+                    battery.is_dead(),
+                )
+                .ignore();
+            }
 
             if on {
-                peripherals
-                    .GPIOB
-                    .odr
-                    .modify(|_, w| w.odr13().clear_bit());
+                peripherals.GPIOB.odr.modify(|_, w| w.odr13().clear_bit());
                 on = false;
             } else {
-                peripherals
-                    .GPIOB
-                    .odr
-                    .modify(|_, w| w.odr13().set_bit());
+                peripherals.GPIOB.odr.modify(|_, w| w.odr13().set_bit());
                 on = true;
             }
 
             last_time = now;
         }
 
-        left_control.update(now);
-        right_control.update(now);
         battery.update(now);
-        uart.flush();
+        uart.flush_tx(&mut time, 50);
     }
 }

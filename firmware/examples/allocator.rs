@@ -34,9 +34,7 @@ const HEAP_SIZE: usize = 1024; // in bytes
 #[entry]
 fn main() -> ! {
     // Initialize the allocator BEFORE you use it
-    unsafe {
-        ALLOCATOR.init(cortex_m_rt::heap_start() as usize, HEAP_SIZE)
-    }
+    unsafe { ALLOCATOR.init(cortex_m_rt::heap_start() as usize, HEAP_SIZE) }
 
     // Growable array allocated on the heap
     let xs = vec![0, 1, 2];

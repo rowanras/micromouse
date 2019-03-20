@@ -9,15 +9,12 @@ pub struct Time {
 }
 
 impl Time {
-    pub fn setup(
-        rcc: &stm32f405::RCC,
-        timer: stm32f405::TIM1,
-    ) -> Time {
+    pub fn setup(rcc: &stm32f405::RCC, timer: stm32f405::TIM1) -> Time {
         // Enable clock for timer 4
         rcc.apb2enr.modify(|_, w| w.tim1en().set_bit());
 
         // setup the timer
-        timer.psc.write(|w| unsafe { w.psc().bits(800) });
+        timer.psc.write(|w| unsafe { w.psc().bits(16000) });
         timer.cr1.modify(|_, w| w.cen().set_bit());
 
         Time {
@@ -27,6 +24,7 @@ impl Time {
         }
     }
 
+    #[inline(always)]
     pub fn now(&mut self) -> u32 {
         let current_time = self.timer.cnt.read().cnt().bits() as u32;
 

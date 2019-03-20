@@ -8,8 +8,14 @@ version = "0.1.0"
 [dependencies]
 cortex-m-rt = "0.6.5"
 cortex-m-semihosting = "0.3.2"
+cortex-m-rt-macros = "0.1.5"
 panic-halt = "0.2.0"
 pid_control = { git = "https://github.com/mbr/pid_control-rs" }
+ignore-result = "0.2.0"
+
+[dependencies.arrayvec]
+version = "0.4.10"
+default-features = false
 
 [dependencies.cortex-m]
 version = "0.5.8"

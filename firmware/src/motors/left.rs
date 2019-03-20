@@ -24,9 +24,8 @@ impl LeftMotor {
         rcc.apb1enr.modify(|_, w| w.tim3en().set_bit());
 
         // Set pins to alternate function
-        gpio.moder.modify(|_, w| {
-            w.moder6().alternate().moder7().alternate()
-        });
+        gpio.moder
+            .modify(|_, w| w.moder6().alternate().moder7().alternate());
 
         // Set the alternate function to timer 3 channel 1 and 2
         gpio.afrl.modify(|_, w| w.afrl6().af2().afrl7().af2());
@@ -94,9 +93,9 @@ impl LeftEncoder {
         gpioa.afrl.modify(|_, w| w.afrl5().af1());
         gpiob.afrl.modify(|_, w| w.afrl3().af1());
 
-        timer.ccmr1_output.write(|w| unsafe {
-            w.cc1s().bits(0b01).cc2s().bits(0b01)
-        });
+        timer
+            .ccmr1_output
+            .write(|w| unsafe { w.cc1s().bits(0b01).cc2s().bits(0b01) });
         timer.smcr.write(|w| unsafe { w.sms().bits(0b011) });
         timer.ccer.write(|w| w.cc1e().set_bit().cc2e().set_bit());
         timer.cr1.write(|w| w.cen().set_bit());

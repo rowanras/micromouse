@@ -1,9 +1,10 @@
 #!/bin/bash
 
+rm $2.dat
 
-tail -f $1 | awk '
-$1 ~ "start" { print > "data"; close("data") }
-$1 !~ "start" { print >> "data"; close("data") }' &
+tail -f $1 | awk -v datafile=$2.dat '
+$1 ~ "start" { print > datafile; close(datafile) }
+$1 !~ "start" { print >> datafile; close(datafile) }' &
 
 gnuplot $2.gnuplot
 

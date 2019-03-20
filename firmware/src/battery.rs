@@ -6,7 +6,7 @@ const DEAD_TIME: u32 = 5000;
 pub struct Battery {
     adc: stm32f405::ADC1,
     last_alive: Option<u32>,
-    last_update : Option<u32>,
+    last_update: Option<u32>,
 }
 
 impl Battery {
@@ -20,11 +20,9 @@ impl Battery {
 
         gpiob.moder.modify(|_, w| w.moder1().analog());
 
-        adc.sqr1.write(|w| w.l().bits(0) );
+        adc.sqr1.write(|w| w.l().bits(0));
         adc.sqr3.write(|w| unsafe { w.sq1().bits(9) });
-        adc.cr2.write(|w| {
-            w.swstart().set_bit().cont().set_bit()
-        });
+        adc.cr2.write(|w| w.swstart().set_bit().cont().set_bit());
 
         adc.cr2.modify(|_, w| w.adon().set_bit());
 
@@ -37,7 +35,7 @@ impl Battery {
 
     pub fn raw(&self) -> u16 {
         let raw = self.adc.dr.read().data().bits();
-        self.adc.cr2.modify(|_, w| w.swstart().set_bit() );
+        self.adc.cr2.modify(|_, w| w.swstart().set_bit());
         raw
     }
 

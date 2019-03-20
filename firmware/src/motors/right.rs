@@ -22,9 +22,8 @@ impl RightMotor {
         rcc.apb1enr.modify(|_, w| w.tim4en().set_bit());
 
         // Set pins to alternate function
-        gpio.moder.modify(|_, w| {
-            w.moder6().alternate().moder7().alternate()
-        });
+        gpio.moder
+            .modify(|_, w| w.moder6().alternate().moder7().alternate());
 
         // Set the alternate function to timer 4 channel 1 and 2
         gpio.afrl.modify(|_, w| w.afrl6().af2().afrl7().af2());
@@ -84,15 +83,15 @@ impl RightEncoder {
         rcc.ahb1enr.modify(|_, w| w.gpioaen().set_bit());
         rcc.apb1enr.modify(|_, w| w.tim5en().set_bit());
 
-        gpioa.moder.modify(|_, w| {
-            w.moder0().alternate().moder1().alternate()
-        });
+        gpioa
+            .moder
+            .modify(|_, w| w.moder0().alternate().moder1().alternate());
 
         gpioa.afrl.modify(|_, w| w.afrl0().af2().afrl1().af2());
 
-        timer.ccmr1_output.write(|w| unsafe {
-            w.cc1s().bits(0b01).cc2s().bits(0b01)
-        });
+        timer
+            .ccmr1_output
+            .write(|w| unsafe { w.cc1s().bits(0b01).cc2s().bits(0b01) });
         timer.smcr.write(|w| unsafe { w.sms().bits(0b011) });
         timer.ccer.write(|w| {
             w.cc1e()
