@@ -1,13 +1,30 @@
 #![no_std]
 #![no_main]
 
+/**
+ *
+ * Important mechanical parameters:
+ *
+ *  - wheel diameter: 32mm
+ *  - wheel circumference: 100mm
+ *  - gear raitio: 75:1
+ *  - counts per motor rev: 12
+ *  - counts per wheel rev: 900
+ *  - counts per mm: 9
+ *  - wheelbase diameter: 73mm
+ *  - wheelbase circumference: 229.336mm
+ *  - ticks per spin: 2064.03
+ *
+ */
 // pick a panicking behavior
 // you can put a breakpoint on `rust_begin_unwind` to catch panics
 extern crate panic_halt;
 
 mod battery;
+mod bot;
+mod control;
+mod distance;
 mod motors;
-mod plan;
 mod time;
 mod uart;
 
@@ -24,11 +41,17 @@ use crate::time::Time;
 use crate::uart::Command;
 use crate::uart::Uart;
 
-use crate::motors::control::MotorControl;
 use crate::motors::left::{LeftEncoder, LeftMotor};
 use crate::motors::right::{RightEncoder, RightMotor};
 
-use crate::plan::Plan;
+use crate::motors::Encoder;
+
+use crate::distance::left::LeftDistance;
+
+use crate::bot::Bot;
+use crate::bot::BotConfig;
+
+use crate::control::Control;
 
 fn mco2_setup(rcc: &stm32f405::RCC, gpioc: &stm32f405::GPIOC) {
     rcc.ahb1enr.write(|w| w.gpiocen().set_bit());
@@ -114,30 +137,48 @@ fn main() -> ! {
         peripherals.TIM5,
     );
 
-    let left_control = MotorControl::new(
-        1.0,
-        0.00000,
-        0.0,
-        30,
-        left_motor,
-        left_encoder,
-        "left",
+    /*
+    let mut left_distance = LeftDistance::setup(
+        &peripherals.RCC,
+        &peripherals.GPIOB,
+        peripherals.I2C2,
     );
+    */
 
-    let right_control = MotorControl::new(
-        1.0,
-        0.00000,
-        00000.0,
-        30,
-        right_motor,
-        right_encoder,
-        "right",
-    );
+    let config = BotConfig {
+        left_p: 2000.0,
+        left_i: 2.0,
+        left_d: 15000.0,
 
-    let mut plan = Plan::new(right_control, left_control, 100, "plan");
+        right_p: 2000.0,
+        right_i: 2.0,
+        right_d: 15000.0,
 
-    writeln!(uart, "").ignore();
-    writeln!(uart, "start").ignore();
+        spin_p: 0.01,
+        spin_i: 0.0,
+        spin_d: 0.0,
+        spin_err: 1.0,
+        spin_settle: 1000,
+
+        linear_p: 0.01,
+        linear_i: 0.0,
+        linear_d: 0.0,
+        linear_spin_p: 0.01,
+        linear_spin_i: 0.0,
+        linear_spin_d: 0.0,
+        linear_err: 0.5,
+        linear_settle: 1000,
+
+        ticks_per_spin: 2064.03,
+        ticks_per_cell: 1620.0,
+    };
+
+    let bot =
+        Bot::new(left_motor, left_encoder, right_motor, right_encoder, config);
+
+    let mut control = Control::new(bot);
+
+    writeln!(uart, "\n\nstart").ignore();
     uart.flush_tx(&mut time, 1000);
 
     let mut last_time: u32 = 0;
@@ -163,8 +204,8 @@ fn main() -> ! {
 
                     let command = args.next();
 
-                    if command == Some(plan.keyword_command()) {
-                        plan.handle_command(&mut uart, args);
+                    if command == Some(control.keyword_command()) {
+                        control.handle_command(&mut uart, args);
                     } else {
                         writeln!(uart, "Invalid Command!").ignore();
                     }
@@ -172,26 +213,44 @@ fn main() -> ! {
             }
         }
 
-        plan.update(now);
-
-        if now - last_time >= 100u32 {
+        if now - last_time >= 20u32 {
             if report {
                 writeln!(
                     uart,
-                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                    "{}\t{:.2}\t{:.2}\t{}\t{}",
                     now,
-                    plan.left_control().position(),
-                    plan.left_control().error(),
-                    plan.left_control().target(),
-                    plan.left_control().motor_velocity(),
-                    plan.linear_acceleration(),
-                    plan.linear_velocity(),
-                    plan.linear_position(),
-                    plan.delta_time(),
+                    //control.bot().left_pos(),
+                    //control.bot().right_pos(),
+                    //control.bot().spin_velocity(),
+                    //control.bot().right_target(),
+                    //control.bot().spin_pos(),
+                    control.bot().left_velocity(),
+                    control.bot().right_velocity(),
+                    //control.bot().left_power(),
+                    //control.bot().right_power(),
+                    //control.bot().linear_velocity(),
+                    //control.bot().spin_velocity(),
+                    //control.bot().linear_pos(),
+                    //control.bot().spin_pos(),
+                    //control.bot().linear_pos(),
+                    //control.current_move_name(),
+                    //left_distance.read_range_single(),
                     battery.raw(),
                     battery.is_dead(),
                 )
                 .ignore();
+            }
+
+            if battery.is_dead() {
+                peripherals.GPIOB.odr.modify(|_, w| w.odr12().clear_bit());
+            } else {
+                peripherals.GPIOB.odr.modify(|_, w| w.odr12().set_bit());
+            }
+
+            if control.is_idle() {
+                peripherals.GPIOB.odr.modify(|_, w| w.odr14().clear_bit());
+            } else {
+                peripherals.GPIOB.odr.modify(|_, w| w.odr14().set_bit());
             }
 
             if on {
@@ -205,6 +264,7 @@ fn main() -> ! {
             last_time = now;
         }
 
+        control.update(now);
         battery.update(now);
         uart.flush_tx(&mut time, 50);
     }

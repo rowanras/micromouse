@@ -24,8 +24,8 @@ const BUFFER_LEN: usize = 64;
 
 static UART: Mutex<RefCell<Option<stm32f405::USART1>>> =
     Mutex::new(RefCell::new(None));
-static RX_BUF: Mutex<RefCell<([u8; 32], usize)>> =
-    Mutex::new(RefCell::new(([0; 32], 0)));
+static RX_BUF: Mutex<RefCell<([u8; BUFFER_LEN], usize)>> =
+    Mutex::new(RefCell::new(([0; BUFFER_LEN], 0)));
 
 pub enum UartError {
     BufferFull,
@@ -148,13 +148,13 @@ impl Uart {
         })
     }
 
-    pub fn read_line(&mut self) -> Option<[u8; 32]> {
+    pub fn read_line(&mut self) -> Option<[u8; BUFFER_LEN]> {
         cortex_m::interrupt::free(|cs| {
             if let Ok(mut buf) = RX_BUF.borrow(cs).try_borrow_mut() {
                 if buf.1 > 0 && buf.0[buf.1 - 1] == 10 {
                     let new_buf = buf.0.clone();
 
-                    buf.0 = [0; 32];
+                    buf.0 = [0; BUFFER_LEN];
                     buf.1 = 0;
 
                     Some(new_buf)
@@ -181,7 +181,7 @@ fn USART1() {
             let rx = uart.dr.read().dr().bits() as u8;
             //uart.dr.write(|w| w.dr().bits(rx as u16));
             if let Ok(mut buf) = RX_BUF.borrow(cs).try_borrow_mut() {
-                if buf.1 < 32 {
+                if buf.1 < BUFFER_LEN {
                     let len = buf.1;
                     buf.0[len] = rx;
 

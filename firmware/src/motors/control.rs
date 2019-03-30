@@ -12,19 +12,25 @@ use crate::uart::Uart;
 use crate::motors::Encoder;
 use crate::motors::Motor;
 
-pub struct MotorControl<'a, M, E>
+enum DriveMode {
+    Idle,
+    Spin(i32),
+}
+
+pub struct MotorControl<'a, LM, LE, RM, RE>
 where
-    M: Motor,
-    E: Encoder,
+    LM: Motor,
+    LE: Encoder,
+    RM: Motor,
+    RE: Encoder,
 {
     pid: PIDController,
     period: u32,
-    target_position: i32,
-    current_position: i32,
-    last_time: Option<u32>,
-    last_motor_velocity: i32,
-    motor: M,
-    encoder: E,
+    last_time: u32,
+    left_motor: LM,
+    left_encoder: LE,
+    right_motor: RM,
+    right_encoder: RE,
     command: &'a str,
 }
 
