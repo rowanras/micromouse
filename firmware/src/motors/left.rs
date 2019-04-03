@@ -1,6 +1,6 @@
 use core::i32;
 
-use stm32f4::stm32f405;
+use stm32f4xx_hal::stm32 as stm32f405;
 
 use crate::motors::{Encoder, Motor};
 

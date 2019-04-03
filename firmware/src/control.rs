@@ -3,8 +3,6 @@ use core::fmt::Write;
 
 use ignore_result::Ignore;
 
-use arrayvec::ArrayVec;
-
 use pid_control::Controller;
 use pid_control::DerivativeMode;
 use pid_control::PIDController;

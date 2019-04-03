@@ -20,18 +20,22 @@
 // you can put a breakpoint on `rust_begin_unwind` to catch panics
 extern crate panic_halt;
 
-mod battery;
-mod bot;
-mod control;
-mod distance;
-mod motors;
-mod time;
-mod uart;
+pub mod battery;
+pub mod bot;
+pub mod control;
+pub mod motors;
+pub mod time;
+pub mod uart;
+pub mod vl6180x;
 
 use core::fmt::Write;
 use core::str;
 use cortex_m_rt::entry;
-use stm32f4::stm32f405;
+use stm32f4xx_hal as stm32f4;
+use stm32f4xx_hal::prelude::*;
+use stm32f4xx_hal::stm32 as stm32f405;
+
+use nb::block;
 
 use ignore_result::Ignore;
 
@@ -44,16 +48,15 @@ use crate::uart::Uart;
 use crate::motors::left::{LeftEncoder, LeftMotor};
 use crate::motors::right::{RightEncoder, RightMotor};
 
-use crate::motors::Encoder;
-
-use crate::distance::left::LeftDistance;
+use vl6180x::VL6180x;
 
 use crate::bot::Bot;
 use crate::bot::BotConfig;
 
 use crate::control::Control;
 
-fn mco2_setup(rcc: &stm32f405::RCC, gpioc: &stm32f405::GPIOC) {
+// Setup the master clock out
+pub fn mco2_setup(rcc: &stm32f405::RCC, gpioc: &stm32f405::GPIOC) {
     rcc.ahb1enr.write(|w| w.gpiocen().set_bit());
     rcc.cfgr.modify(|_, w| w.mco2().sysclk());
     gpioc.moder.write(|w| w.moder9().alternate());
@@ -62,89 +65,67 @@ fn mco2_setup(rcc: &stm32f405::RCC, gpioc: &stm32f405::GPIOC) {
 
 #[entry]
 fn main() -> ! {
-    let peripherals = stm32f405::Peripherals::take().unwrap();
-    let mut core_peripherals = stm32f405::CorePeripherals::take().unwrap();
+    let p = stm32f4::stm32::Peripherals::take().unwrap();
+    let mut cp = stm32f405::CorePeripherals::take().unwrap();
 
-    peripherals.RCC.ahb1enr.write(|w| w.gpioben().set_bit());
+    // Init non-hal things
+    let mut time = Time::setup(&p.RCC, p.TIM1);
+    let mut battery = Battery::setup(&p.RCC, &p.GPIOB, p.ADC1);
 
-    //peripherals
-    //.GPIOA
-    //.moder
-    //.write(|w| w.moder6().output().moder7().output().moder8().output());
-    //peripherals
-    //.GPIOA
-    //.odr
-    //.write(|w| w.odr6().clear_bit().odr7().set_bit());
+    let mut uart = Uart::setup(&p.RCC, &mut cp.NVIC, p.USART1, &p.GPIOA);
 
-    peripherals.GPIOB.moder.modify(|_, w| {
-        w.moder12()
-            .output()
-            .moder13()
-            .output()
-            .moder14()
-            .output()
-            .moder15()
-            .output()
-    });
+    let left_motor = LeftMotor::setup(&p.RCC, p.TIM3, &p.GPIOA);
 
-    peripherals.GPIOB.odr.write(|w| {
-        w.odr12()
-            .clear_bit()
-            .odr13()
-            .clear_bit()
-            .odr14()
-            .clear_bit()
-            .odr15()
-            .clear_bit()
-    });
+    let left_encoder = LeftEncoder::setup(&p.RCC, &p.GPIOA, &p.GPIOB, p.TIM2);
 
-    //mco2_setup(&peripherals.RCC, &peripherals.GPIOC);
+    let right_motor = RightMotor::setup(&p.RCC, p.TIM4, &p.GPIOB);
+    let right_encoder = RightEncoder::setup(&p.RCC, &p.GPIOA, p.TIM5);
 
-    let mut time = Time::setup(&peripherals.RCC, peripherals.TIM1);
+    // Init the hal things
+    let rcc = p.RCC.constrain();
+    let clocks = rcc.cfgr.freeze();
 
-    while time.now() < 1000 {}
+    let gpioa = p.GPIOA.split();
+    let gpiob = p.GPIOB.split();
+    let gpioc = p.GPIOC.split();
 
-    let mut left_distance = LeftDistance::setup(
-        &peripherals.RCC,
-        &peripherals.GPIOB,
-        peripherals.I2C2,
-    );
+    let mut red_led = gpiob.pb12.into_push_pull_output();
+    let mut green_led = gpiob.pb13.into_push_pull_output();
+    let mut blue_led = gpiob.pb14.into_push_pull_output();
+    let mut orange_led = gpiob.pb15.into_push_pull_output();
 
-    /*
-    let mut battery =
-        Battery::setup(&peripherals.RCC, &peripherals.GPIOB, peripherals.ADC1);
+    let scl = gpiob.pb10.into_open_drain_output().into_alternate_af4();
+    let sda = gpiob.pb11.into_open_drain_output().into_alternate_af4();
 
-    let mut uart = Uart::setup(
-        &peripherals.RCC,
-        &mut core_peripherals.NVIC,
-        peripherals.USART1,
-        &peripherals.GPIOA,
-    );
+    let mut gpio0 = gpioc.pc2.into_open_drain_output();
+    gpio0.set_high();
 
-    let left_motor = LeftMotor::setup(
-        &peripherals.RCC,
-        peripherals.TIM3,
-        &peripherals.GPIOA,
-    );
+    let mut gpio1 = gpioc.pc3.into_open_drain_output();
+    gpio1.set_high();
 
-    let left_encoder = LeftEncoder::setup(
-        &peripherals.RCC,
-        &peripherals.GPIOA,
-        &peripherals.GPIOB,
-        peripherals.TIM2,
-    );
+    let mut i2c =
+        stm32f4::i2c::I2c::i2c2(p.I2C2, (scl, sda), 100.khz(), clocks);
 
-    let right_motor = RightMotor::setup(
-        &peripherals.RCC,
-        peripherals.TIM4,
-        &peripherals.GPIOB,
-    );
+    writeln!(uart, "Initializing");
+    uart.flush_tx(&mut time, 50);
 
-    let right_encoder = RightEncoder::setup(
-        &peripherals.RCC,
-        &peripherals.GPIOA,
-        peripherals.TIM5,
-    );
+    time.delay(10000);
+
+    let mut distance = vl6180x::VL6180x::new(i2c, 0x29);
+    distance.init_private_registers();
+    distance.init_default();
+
+    writeln!(uart, "Reading id registers");
+    uart.flush_tx(&mut time, 50);
+
+    for _ in 0..8 {
+        let buf = distance.get_id_bytes();
+
+        writeln!(uart, "{:x?}", buf);
+        uart.flush_tx(&mut time, 50);
+
+        orange_led.toggle();
+    }
 
     let config = BotConfig {
         left_p: 2000.0,
@@ -182,15 +163,12 @@ fn main() -> ! {
     writeln!(uart, "\n\nstart").ignore();
     uart.flush_tx(&mut time, 1000);
 
-*/
     let mut last_time: u32 = 0;
-    let mut on = false;
 
     let mut report = true;
     loop {
         let now: u32 = time.now();
 
-        /*
         if let Some(line) = uart.read_line() {
             if let Ok(string) = str::from_utf8(&line) {
                 let string = string.trim_matches(|c| c as u8 == 0).trim();
@@ -214,62 +192,54 @@ fn main() -> ! {
                 }
             }
         }
-*/
+
         if now - last_time >= 20u32 {
-            /*
+            let range = distance.read_range_single();
             if report {
                 writeln!(
                     uart,
-                    "{}\t{:.2}\t{:.2}\t{}\t{}\t{}",
+                    "{}\t{}\t{}\t{:.2}\t{:.2}\t{}\t{}\t{}",
                     now,
-                    //control.bot().left_pos(),
-                    //control.bot().right_pos(),
-                    //control.bot().spin_velocity(),
+                    control.bot().left_pos(),
+                    control.bot().right_pos(),
                     //control.bot().right_target(),
                     //control.bot().spin_pos(),
-                    control.bot().left_velocity(),
-                    control.bot().right_velocity(),
+                    //control.bot().left_velocity(),
+                    //control.bot().right_velocity(),
                     //control.bot().left_power(),
                     //control.bot().right_power(),
-                    //control.bot().linear_velocity(),
-                    //control.bot().spin_velocity(),
+                    control.bot().linear_velocity(),
+                    control.bot().spin_velocity(),
                     //control.bot().linear_pos(),
                     //control.bot().spin_pos(),
                     //control.bot().linear_pos(),
                     //control.current_move_name(),
-                    left_distance.read_range_single(),
+                    range,
                     battery.raw(),
                     battery.is_dead(),
                 )
                 .ignore();
             }
 
-            if battery.is_dead() {
-                peripherals.GPIOB.odr.modify(|_, w| w.odr12().clear_bit());
-            } else {
-                peripherals.GPIOB.odr.modify(|_, w| w.odr12().set_bit());
-            }
+            green_led.toggle();
 
             if control.is_idle() {
-                peripherals.GPIOB.odr.modify(|_, w| w.odr14().clear_bit());
+                blue_led.set_low();
             } else {
-                peripherals.GPIOB.odr.modify(|_, w| w.odr14().set_bit());
+                blue_led.set_high();
             }
-            */
 
-            if on {
-                peripherals.GPIOB.odr.modify(|_, w| w.odr13().clear_bit());
-                on = false;
+            if battery.is_dead() {
+                red_led.set_high();
             } else {
-                peripherals.GPIOB.odr.modify(|_, w| w.odr13().set_bit());
-                on = true;
+                red_led.set_low();
             }
 
             last_time = now;
         }
 
-        //control.update(now);
-        //battery.update(now);
-        //uart.flush_tx(&mut time, 50);
+        control.update(now);
+        battery.update(now);
+        uart.flush_tx(&mut time, 50);
     }
 }

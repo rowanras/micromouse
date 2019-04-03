@@ -6,8 +6,8 @@ use core::cell::RefCell;
 use cortex_m::interrupt::Mutex;
 use cortex_m_rt_macros::interrupt as isr;
 
-use stm32f4::stm32f405;
-use stm32f4::stm32f405::interrupt;
+use stm32f4xx_hal::stm32 as stm32f405;
+use stm32f4xx_hal::stm32::Interrupt as interrupt;
 
 use crate::time::Time;
 

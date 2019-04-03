@@ -1,4 +1,4 @@
-use stm32f4::stm32f405;
+use stm32f4xx_hal::stm32 as stm32f405;
 
 const DEAD_VOLTAGE: u16 = 2000;
 const DEAD_TIME: u32 = 5000;
@@ -50,7 +50,7 @@ impl Battery {
     pub fn is_dead(&self) -> bool {
         match (self.last_alive, self.last_update) {
             (Some(alive), Some(update)) => update - alive > DEAD_TIME,
-            _ => false,
+            _ => true,
         }
     }
 }

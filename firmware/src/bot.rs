@@ -1,6 +1,4 @@
-use core::fmt::Display;
 use core::fmt::Write;
-use core::str::FromStr;
 
 use ignore_result::Ignore;
 

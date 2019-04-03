@@ -1,4 +1,4 @@
-use stm32f4::stm32f405;
+use stm32f4xx_hal::stm32 as stm32f405;
 
 static OVERFLOW_VALUE: u32 = 65535;
 
@@ -35,5 +35,11 @@ impl Time {
         self.last_time = current_time;
 
         current_time + self.overflows * OVERFLOW_VALUE
+    }
+
+    pub fn delay(&mut self, usecs: u32) {
+        let start_time = self.now();
+
+        while self.now() - start_time < usecs {}
     }
 }
