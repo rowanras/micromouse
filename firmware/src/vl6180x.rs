@@ -77,9 +77,12 @@ where
     I2C: i2c::Read + i2c::Write + i2c::WriteRead,
 {
     i2c: I2C,
+
     address: u8,
     scaling: u8,
     ptp_offset: u8,
+
+    range: Option<u8>,
 }
 
 impl<I2C> VL6180x<I2C>
@@ -92,6 +95,7 @@ where
             address,
             scaling: 1,
             ptp_offset: 0,
+            range: None,
         }
     }
 
@@ -133,87 +137,6 @@ where
 
         buf
     }
-
-    /*
-        pub fn init(&mut self) {
-        // load settings!
-
-        // private settings from page 24 of app note
-        self.write_u8(0x0207, 0x01);
-        self.write_u8(0x0208, 0x01);
-        self.write_u8(0x0096, 0x00);
-        self.write_u8(0x0097, 0xfd);
-        self.write_u8(0x00e3, 0x00);
-        self.write_u8(0x00e4, 0x04);
-        self.write_u8(0x00e5, 0x02);
-        self.write_u8(0x00e6, 0x01);
-        self.write_u8(0x00e7, 0x03);
-        self.write_u8(0x00f5, 0x02);
-        self.write_u8(0x00d9, 0x05);
-        self.write_u8(0x00db, 0xce);
-        self.write_u8(0x00dc, 0x03);
-        self.write_u8(0x00dd, 0xf8);
-        self.write_u8(0x009f, 0x00);
-        self.write_u8(0x00a3, 0x3c);
-        self.write_u8(0x00b7, 0x00);
-        self.write_u8(0x00bb, 0x3c);
-        self.write_u8(0x00b2, 0x09);
-        self.write_u8(0x00ca, 0x09);
-        self.write_u8(0x0198, 0x01);
-        self.write_u8(0x01b0, 0x17);
-        self.write_u8(0x01ad, 0x00);
-        self.write_u8(0x00ff, 0x05);
-        self.write_u8(0x0100, 0x05);
-        self.write_u8(0x0199, 0x05);
-        self.write_u8(0x01a6, 0x1b);
-        self.write_u8(0x01ac, 0x3e);
-        self.write_u8(0x01a7, 0x1f);
-        self.write_u8(0x0030, 0x00);
-
-        // Recommended : Public registers - See data sheet for more detail
-        self.write_u8(0x0011, 0x10);       // Enables polling for 'New Sample ready'
-                                    // when measurement completes
-        self.write_u8(0x010a, 0x30);       // Set the averaging sample period
-                                    // (compromise between lower noise and
-                                    // increased execution time)
-        self.write_u8(0x003f, 0x46);       // Sets the light and dark gain (upper
-                                    // nibble). Dark gain should not be
-                                    // changed.
-        self.write_u8(0x0031, 0xFF);       // sets the # of range measurements after
-                                    // which auto calibration of system is
-                                    // performed
-        self.write_u8(0x0040, 0x63);       // Set ALS integration time to 100ms
-        self.write_u8(0x002e, 0x01);       // perform a single temperature calibration
-                                    // of the ranging sensor
-
-        // Optional: Public registers - See data sheet for more detail
-        self.write_u8(0x001b, 0x09);       // Set default ranging inter-measurement
-                                    // period to 100ms
-        self.write_u8(0x003e, 0x31);       // Set default ALS inter-measurement period
-                                    // to 500ms
-        self.write_u8(0x0014, 0x24);       // Configures interrupt on 'New Sample
-    // Ready threshold event'
-        }
-
-        pub fn read_range(&mut self) -> u8 {
-            // wait for device to be ready for range measurement
-            while !(self.read_u8(registers::RESULT__RANGE_STATUS) & 0x01 != 0) {}
-
-            // Start a range measurement
-            self.write_u8(registers::SYSRANGE__START, 0x01);
-
-            // Poll until bit 2 is set
-            while !(self.read_u8(registers::RESULT__INTERRUPT_STATUS_GPIO) & 0x04 != 0) {}
-
-            // read range in mm
-            let range = self.read_u8(registers::RESULT__RANGE_VAL);
-
-            // clear interrupt
-            self.write_u8(registers::SYSTEM__INTERRUPT_CLEAR, 0x07);
-
-            return range;
-        }
-        */
 
     pub fn init_private_registers(&mut self) {
         // Store part-to-part range offset so it can be adjusted if scaling is changed
@@ -413,5 +336,26 @@ where
         self.write_u8(registers::SYSTEM__INTERRUPT_CLEAR, 0x01);
 
         range
+    }
+
+    pub fn start_ranging(&mut self) {
+        self.write_u8(registers::SYSRANGE__START, 0x01);
+    }
+
+    pub fn update(&mut self) {
+        if (self.read_u8(registers::RESULT__INTERRUPT_STATUS_GPIO) * 0x04) != 0 {
+            let range = self.read_u8(registers::RESULT__RANGE_VAL);
+            self.write_u8(registers::SYSTEM__INTERRUPT_CLEAR, 0x01);
+            self.start_ranging();
+
+            self.range = match range {
+                255 => None,
+                val => Some(val),
+            };
+        }
+    }
+
+    pub fn range(&self) -> Option<u8> {
+        self.range
     }
 }

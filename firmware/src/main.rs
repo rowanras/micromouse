@@ -235,6 +235,11 @@ fn main() -> ! {
     let mut last_time: u32 = 0;
 
     let mut report = true;
+
+    front_distance.start_ranging();
+    left_distance.start_ranging();
+    right_distance.start_ranging();
+
     loop {
         let now: u32 = time.now();
 
@@ -282,9 +287,9 @@ fn main() -> ! {
                     //control.bot().spin_pos(),
                     //control.bot().linear_pos(),
                     //control.current_move_name(),
-                    front_distance.read_range_single(),
-                    left_distance.read_range_single(),
-                    right_distance.read_range_single(),
+                    front_distance.range().unwrap_or(245),
+                    left_distance.range().unwrap_or(245),
+                    right_distance.range().unwrap_or(245),
                     battery.raw(),
                     battery.is_dead(),
                 )
@@ -308,6 +313,9 @@ fn main() -> ! {
             last_time = now;
         }
 
+        front_distance.update();
+        left_distance.update();
+        right_distance.update();
         control.update(now);
         battery.update(now);
         uart.flush_tx(&mut time, 50);
