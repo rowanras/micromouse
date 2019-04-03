@@ -22,6 +22,7 @@ extern crate panic_halt;
 
 pub mod battery;
 pub mod bot;
+pub mod config;
 pub mod control;
 pub mod motors;
 pub mod plan;
@@ -35,8 +36,6 @@ use cortex_m_rt::entry;
 use stm32f4xx_hal as stm32f4;
 use stm32f4xx_hal::prelude::*;
 use stm32f4xx_hal::stm32 as stm32f405;
-
-use nb::block;
 
 use ignore_result::Ignore;
 
@@ -52,7 +51,7 @@ use crate::motors::right::{RightEncoder, RightMotor};
 use vl6180x::VL6180x;
 
 use crate::bot::Bot;
-use crate::bot::BotConfig;
+use crate::config::BotConfig;
 
 use crate::control::Control;
 

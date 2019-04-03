@@ -8,7 +8,7 @@ use pid_control::DerivativeMode;
 use pid_control::PIDController;
 
 use crate::bot::Bot;
-use crate::bot::BotConfig;
+use crate::config::BotConfig;
 
 use crate::uart::Command;
 use crate::uart::Uart;
