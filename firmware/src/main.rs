@@ -102,6 +102,15 @@ fn main() -> ! {
 
     let mut time = Time::setup(&peripherals.RCC, peripherals.TIM1);
 
+    while time.now() < 1000 {}
+
+    let mut left_distance = LeftDistance::setup(
+        &peripherals.RCC,
+        &peripherals.GPIOB,
+        peripherals.I2C2,
+    );
+
+    /*
     let mut battery =
         Battery::setup(&peripherals.RCC, &peripherals.GPIOB, peripherals.ADC1);
 
@@ -136,14 +145,6 @@ fn main() -> ! {
         &peripherals.GPIOA,
         peripherals.TIM5,
     );
-
-    /*
-    let mut left_distance = LeftDistance::setup(
-        &peripherals.RCC,
-        &peripherals.GPIOB,
-        peripherals.I2C2,
-    );
-    */
 
     let config = BotConfig {
         left_p: 2000.0,
@@ -181,14 +182,15 @@ fn main() -> ! {
     writeln!(uart, "\n\nstart").ignore();
     uart.flush_tx(&mut time, 1000);
 
+*/
     let mut last_time: u32 = 0;
     let mut on = false;
 
     let mut report = true;
-
     loop {
         let now: u32 = time.now();
 
+        /*
         if let Some(line) = uart.read_line() {
             if let Ok(string) = str::from_utf8(&line) {
                 let string = string.trim_matches(|c| c as u8 == 0).trim();
@@ -212,12 +214,13 @@ fn main() -> ! {
                 }
             }
         }
-
+*/
         if now - last_time >= 20u32 {
+            /*
             if report {
                 writeln!(
                     uart,
-                    "{}\t{:.2}\t{:.2}\t{}\t{}",
+                    "{}\t{:.2}\t{:.2}\t{}\t{}\t{}",
                     now,
                     //control.bot().left_pos(),
                     //control.bot().right_pos(),
@@ -234,7 +237,7 @@ fn main() -> ! {
                     //control.bot().spin_pos(),
                     //control.bot().linear_pos(),
                     //control.current_move_name(),
-                    //left_distance.read_range_single(),
+                    left_distance.read_range_single(),
                     battery.raw(),
                     battery.is_dead(),
                 )
@@ -252,6 +255,7 @@ fn main() -> ! {
             } else {
                 peripherals.GPIOB.odr.modify(|_, w| w.odr14().set_bit());
             }
+            */
 
             if on {
                 peripherals.GPIOB.odr.modify(|_, w| w.odr13().clear_bit());
@@ -264,8 +268,8 @@ fn main() -> ! {
             last_time = now;
         }
 
-        control.update(now);
-        battery.update(now);
-        uart.flush_tx(&mut time, 50);
+        //control.update(now);
+        //battery.update(now);
+        //uart.flush_tx(&mut time, 50);
     }
 }

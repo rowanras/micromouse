@@ -84,19 +84,26 @@ impl LeftDistance {
         gpio: &stm32f405::GPIOB,
         i2c: stm32f405::I2C2,
     ) -> LeftDistance {
-        rcc.ahb1enr.modify(|_, w| w.gpioben().set_bit());
 
+        /*
         // Enable clock for i2c
         rcc.apb1enr.modify(|_, w| w.i2c2en().set_bit());
+        rcc.ahb1enr.modify(|_, w| w.gpioben().set_bit());
+        /*
 
         // Set pins to alternate function
         gpio.moder
             .modify(|_, w| w.moder10().alternate().moder11().alternate());
 
+        // Set open drain pull up
+        gpio.otyper.modify(|_, w| w.ot10().open_drain().ot11().open_drain());
+        gpio.pupdr.modify(|_, w| w.pupdr10().pull_up().pupdr11().pull_up());
+
         // Set the alternate function to i2c
         gpio.afrh.modify(|_, w| w.afrh10().af4().afrh11().af4());
 
         // Apparently, bit 14 "Should always be kept at 1 by software."
+        // According to the datasheet
         i2c.oar1.write(|w| unsafe { w.bits(0x4000) });
 
         // Set the clocks for i2c
@@ -105,6 +112,120 @@ impl LeftDistance {
         i2c.ccr.write(|w| unsafe { w.f_s().standard().ccr().bits(80) });
         i2c.trise.write(|w| unsafe { w.trise().bits(17) });
         i2c.cr1.write(|w| w.pe().set_bit());
+        */
+
+        // STM32F101 I2C bug workaround
+        // 1. Disable the I2C peripheral by clearing the PE bit in I2Cx_CR1 register
+        i2c.cr1.modify(|_, w| w.pe().clear_bit());
+
+        // 2. Configure the SCL and SDA I/Os as General Purpose Output Open-Drain,
+        // High level (Write 1 to GPIOx_ODR).
+        gpio.moder.modify(|_, w| w.moder10().output().moder11().output());
+        gpio.otyper.modify(|_, w| w.ot10().open_drain().ot11().open_drain());
+        gpio.odr.modify(|_, w| w.odr10().set_bit().odr11().set_bit());
+
+        // 3. Check SCL and SDA High level in GPIOx_IDR
+        while gpio.idr.read().idr10().bit_is_clear() {}
+        while gpio.idr.read().idr11().bit_is_clear() {}
+
+        // 4. Configure the SDA I/O as General Purpose Output Open-Drain,
+        // Low level (Write 0 to GPIOx_ODR).
+        gpio.moder.modify(|_, w| w.moder11().output());
+        gpio.otyper.modify(|_, w| w.ot11().open_drain());
+        gpio.odr.modify(|_, w| w.odr11().clear_bit());
+
+        // 5. Check SDA Low level in GPIOx_IDR.
+        while gpio.idr.read().idr11().bit_is_set() {}
+
+        // 6. Configure the SCL I/O as General Purpose Output Open-Drain,
+        // Low level (Write 0 to GPIOx_ODR).
+        gpio.moder.modify(|_, w| w.moder10().output());
+        gpio.otyper.modify(|_, w| w.ot10().open_drain());
+        gpio.odr.modify(|_, w| w.odr10().clear_bit());
+
+        // 7. Check SCL Low level in GPIOx_IDR.
+        while gpio.idr.read().idr10().bit_is_set() {}
+
+        // 8. Configure the SCL I/O as General Purpose Output Open-Drain,
+        // High level (Write 1 to GPIOx_ODR).
+        gpio.moder.modify(|_, w| w.moder10().output());
+        gpio.otyper.modify(|_, w| w.ot10().open_drain());
+        gpio.odr.modify(|_, w| w.odr10().set_bit());
+
+        // 9. Check SCL High level in GPIOx_IDR.
+        while gpio.idr.read().idr10().bit_is_clear() {}
+
+        // 10. Configure the SDA I/O as General Purpose Output Open-Drain,
+        // High level (Write 1 to GPIOx_ODR).
+        gpio.moder.modify(|_, w| w.moder11().output());
+        gpio.otyper.modify(|_, w| w.ot11().open_drain());
+        gpio.odr.modify(|_, w| w.odr11().set_bit());
+
+        // 11. Check   SDA   High   level in GPIOx_IDR
+        while gpio.idr.read().idr11().bit_is_clear() {}
+
+        // 12. Configure the SCL and SDA I/Os as Alternate function Open-Drain.
+        gpio.afrh.modify(|_, w| w.afrh10().af4().afrh11().af4());
+        gpio.otyper.modify(|_, w| w.ot10().open_drain().ot11().open_drain());
+
+        // 13. Set SWRST bit in I2Cx_CR1 register.
+        i2c.cr1.modify(|_, w| w.swrst().set_bit());
+
+        // 14. Clear SWRST bit in I2Cx_CR1 register.
+        i2c.cr1.modify(|_, w| w.swrst().clear_bit());
+
+        // 15. Enable the I2C peripheral by setting the PE bit in I2Cx_CR1 register.
+
+        rcc.apb1rstr.modify(|_, w| w.i2c2rst().set_bit());
+
+        let mut i = 10000;
+        while i > 0 {
+            i -= 1;
+        }
+
+        rcc.apb1rstr.modify(|_, w| w.i2c2rst().clear_bit());
+
+        // Apparently, bit 14 "Should always be kept at 1 by software."
+        // According to the datasheet
+        i2c.oar1.modify(|_, w| unsafe { w.bits(0x4000) });
+
+        // Set the clocks for i2c
+        // http://tath.eu/projects/stm32/stm32-i2c-calculating-clock-control-register/
+        i2c.cr2.modify(|_, w| unsafe { w.freq().bits(16) });
+        i2c.ccr.modify(|_, w| unsafe { w.f_s().standard().ccr().bits(80) });
+        i2c.trise.modify(|_, w| unsafe { w.trise().bits(17) });
+        i2c.cr1.modify(|_, w| w.pe().set_bit());
+        i2c.cr1.modify(|_, w| w.stop().set_bit());
+        */
+
+        // Enable clock for I2C2
+        rcc.apb1enr.modify(|_, w| w.i2c2en().set_bit());
+
+        // Reset I2C2
+        rcc.apb1rstr.modify(|_, w| w.i2c2rst().set_bit());
+        rcc.apb1rstr.modify(|_, w| w.i2c2rst().clear_bit());
+
+        // Make sure the I2C unit is disabled so we can configure it
+        i2c.cr1.modify(|_, w| w.pe().clear_bit());
+
+        // Configure bus frequency into I2C peripheral
+        i2c.cr2.write(|w| unsafe { w.freq().bits(16 as u8) });
+
+        // Configure correct rise times
+        i2c.trise.write(|w| w.trise().bits(17 as u8));
+
+        // Set clock to standard mode with appropriate parameters for selected speed
+        i2c.ccr.write(|w| unsafe {
+            w.f_s()
+                .clear_bit()
+                .duty()
+                .clear_bit()
+                .ccr()
+                .bits(80 as u16)
+        });
+
+        // Enable the I2C processing
+        i2c.cr1.modify(|_, w| w.pe().set_bit());
 
         let mut left_distance = LeftDistance {
             i2c,
@@ -123,7 +244,7 @@ impl LeftDistance {
         self.i2c.cr1.modify(|_, w| w.start().set_bit());
 
         //while self.i2c.sr1.read().tx_e().bit_is_clear() {}
-        while self.i2c.sr1.read().sb().bit_is_clear() {}
+        //while self.i2c.sr1.read().sb().bit_is_clear() {}
 
         let write = if write { 0 } else { 1 };
         let write_addr = (addr << 1) | write as u8;
