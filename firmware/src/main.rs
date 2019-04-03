@@ -70,6 +70,9 @@ fn main() -> ! {
 
     // Init non-hal things
     let mut time = Time::setup(&p.RCC, p.TIM1);
+
+    while time.now() < 10000 {}
+
     let mut battery = Battery::setup(&p.RCC, &p.GPIOB, p.ADC1);
 
     let mut uart = Uart::setup(&p.RCC, &mut cp.NVIC, p.USART1, &p.GPIOA);
@@ -94,32 +97,98 @@ fn main() -> ! {
     let mut blue_led = gpiob.pb14.into_push_pull_output();
     let mut orange_led = gpiob.pb15.into_push_pull_output();
 
-    let scl = gpiob.pb10.into_open_drain_output().into_alternate_af4();
-    let sda = gpiob.pb11.into_open_drain_output().into_alternate_af4();
-
-    let mut gpio0 = gpioc.pc2.into_open_drain_output();
-    gpio0.set_high();
-
-    let mut gpio1 = gpioc.pc3.into_open_drain_output();
-    gpio1.set_high();
-
-    let mut i2c =
-        stm32f4::i2c::I2c::i2c2(p.I2C2, (scl, sda), 100.khz(), clocks);
-
     writeln!(uart, "Initializing");
     uart.flush_tx(&mut time, 50);
 
-    time.delay(10000);
+    let mut front_distance = {
 
-    let mut distance = vl6180x::VL6180x::new(i2c, 0x29);
-    distance.init_private_registers();
-    distance.init_default();
+        let scl = gpiob.pb8.into_open_drain_output().into_alternate_af4();
+        let sda = gpiob.pb9.into_open_drain_output().into_alternate_af4();
+
+        let mut gpio0 = gpioc.pc0.into_open_drain_output();
+        gpio0.set_high();
+
+        let mut gpio1 = gpioc.pc1.into_open_drain_output();
+        gpio1.set_high();
+
+        let mut i2c =
+            stm32f4::i2c::I2c::i2c1(p.I2C1, (scl, sda), 100.khz(), clocks);
+
+        time.delay(10000);
+
+        let mut distance = vl6180x::VL6180x::new(i2c, 0x29);
+        distance.init_private_registers();
+        distance.init_default();
+        distance
+    };
+
+    let mut left_distance = {
+
+        let scl = gpiob.pb10.into_open_drain_output().into_alternate_af4();
+        let sda = gpiob.pb11.into_open_drain_output().into_alternate_af4();
+
+        let mut gpio0 = gpioc.pc2.into_open_drain_output();
+        gpio0.set_high();
+
+        let mut gpio1 = gpioc.pc3.into_open_drain_output();
+        gpio1.set_high();
+
+        let mut i2c =
+            stm32f4::i2c::I2c::i2c2(p.I2C2, (scl, sda), 100.khz(), clocks);
+
+        time.delay(1000);
+
+        let mut distance = vl6180x::VL6180x::new(i2c, 0x29);
+        distance.init_private_registers();
+        distance.init_default();
+        distance
+    };
+
+    let mut right_distance = {
+
+        let scl = gpioa.pa8.into_open_drain_output().into_alternate_af4();
+        let sda = gpioc.pc9.into_open_drain_output().into_alternate_af4();
+
+        let mut gpio0 = gpioc.pc4.into_open_drain_output();
+        gpio0.set_high();
+
+        let mut gpio1 = gpioc.pc5.into_open_drain_output();
+        gpio1.set_high();
+
+        let mut i2c =
+            stm32f4::i2c::I2c::i2c3(p.I2C3, (scl, sda), 100.khz(), clocks);
+
+        time.delay(1000);
+
+        let mut distance = vl6180x::VL6180x::new(i2c, 0x29);
+        distance.init_private_registers();
+        distance.init_default();
+        distance
+    };
 
     writeln!(uart, "Reading id registers");
     uart.flush_tx(&mut time, 50);
 
-    for _ in 0..8 {
-        let buf = distance.get_id_bytes();
+    for _ in 0..2 {
+        let buf = front_distance.get_id_bytes();
+
+        writeln!(uart, "{:x?}", buf);
+        uart.flush_tx(&mut time, 50);
+
+        orange_led.toggle();
+    }
+
+    for _ in 0..2 {
+        let buf = left_distance.get_id_bytes();
+
+        writeln!(uart, "{:x?}", buf);
+        uart.flush_tx(&mut time, 50);
+
+        orange_led.toggle();
+    }
+
+    for _ in 0..2 {
+        let buf = right_distance.get_id_bytes();
 
         writeln!(uart, "{:x?}", buf);
         uart.flush_tx(&mut time, 50);
@@ -194,11 +263,10 @@ fn main() -> ! {
         }
 
         if now - last_time >= 20u32 {
-            let range = distance.read_range_single();
             if report {
                 writeln!(
                     uart,
-                    "{}\t{}\t{}\t{:.2}\t{:.2}\t{}\t{}\t{}",
+                    "{}\t{}\t{}\t{:.2}\t{:.2}\t{}\t{}\t{}\t{}\t{}",
                     now,
                     control.bot().left_pos(),
                     control.bot().right_pos(),
@@ -214,7 +282,9 @@ fn main() -> ! {
                     //control.bot().spin_pos(),
                     //control.bot().linear_pos(),
                     //control.current_move_name(),
-                    range,
+                    front_distance.read_range_single(),
+                    left_distance.read_range_single(),
+                    right_distance.read_range_single(),
                     battery.raw(),
                     battery.is_dead(),
                 )
