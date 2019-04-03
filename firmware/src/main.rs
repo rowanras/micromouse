@@ -24,6 +24,7 @@ pub mod battery;
 pub mod bot;
 pub mod control;
 pub mod motors;
+pub mod plan;
 pub mod time;
 pub mod uart;
 pub mod vl6180x;
@@ -101,7 +102,6 @@ fn main() -> ! {
     uart.flush_tx(&mut time, 50);
 
     let mut front_distance = {
-
         let scl = gpiob.pb8.into_open_drain_output().into_alternate_af4();
         let sda = gpiob.pb9.into_open_drain_output().into_alternate_af4();
 
@@ -123,7 +123,6 @@ fn main() -> ! {
     };
 
     let mut left_distance = {
-
         let scl = gpiob.pb10.into_open_drain_output().into_alternate_af4();
         let sda = gpiob.pb11.into_open_drain_output().into_alternate_af4();
 
@@ -145,7 +144,6 @@ fn main() -> ! {
     };
 
     let mut right_distance = {
-
         let scl = gpioa.pa8.into_open_drain_output().into_alternate_af4();
         let sda = gpioc.pc9.into_open_drain_output().into_alternate_af4();
 
@@ -224,8 +222,16 @@ fn main() -> ! {
         ticks_per_cell: 1620.0,
     };
 
-    let bot =
-        Bot::new(left_motor, left_encoder, right_motor, right_encoder, config);
+    let bot = Bot::new(
+        left_motor,
+        left_encoder,
+        right_motor,
+        right_encoder,
+        front_distance,
+        left_distance,
+        right_distance,
+        config,
+    );
 
     let mut control = Control::new(bot);
 
@@ -235,10 +241,6 @@ fn main() -> ! {
     let mut last_time: u32 = 0;
 
     let mut report = true;
-
-    front_distance.start_ranging();
-    left_distance.start_ranging();
-    right_distance.start_ranging();
 
     loop {
         let now: u32 = time.now();
@@ -286,10 +288,10 @@ fn main() -> ! {
                     //control.bot().linear_pos(),
                     //control.bot().spin_pos(),
                     //control.bot().linear_pos(),
-                    //control.current_move_name(),
-                    front_distance.range().unwrap_or(245),
-                    left_distance.range().unwrap_or(245),
-                    right_distance.range().unwrap_or(245),
+                    //control.currnt_move_name(),
+                    control.bot().front_distance().unwrap_or(245),
+                    control.bot().left_distance().unwrap_or(245),
+                    control.bot().right_distance().unwrap_or(245),
                     battery.raw(),
                     battery.is_dead(),
                 )
@@ -313,9 +315,6 @@ fn main() -> ! {
             last_time = now;
         }
 
-        front_distance.update();
-        left_distance.update();
-        right_distance.update();
         control.update(now);
         battery.update(now);
         uart.flush_tx(&mut time, 50);

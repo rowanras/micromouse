@@ -343,7 +343,8 @@ where
     }
 
     pub fn update(&mut self) {
-        if (self.read_u8(registers::RESULT__INTERRUPT_STATUS_GPIO) * 0x04) != 0 {
+        if (self.read_u8(registers::RESULT__INTERRUPT_STATUS_GPIO) * 0x04) != 0
+        {
             let range = self.read_u8(registers::RESULT__RANGE_VAL);
             self.write_u8(registers::SYSTEM__INTERRUPT_CLEAR, 0x01);
             self.start_ranging();

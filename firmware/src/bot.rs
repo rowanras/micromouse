@@ -1,5 +1,10 @@
 use core::fmt::Write;
 
+use stm32f4xx_hal::gpio::{gpioa, gpiob, gpioc, Alternate, AF4};
+use stm32f4xx_hal::i2c::I2c;
+use stm32f4xx_hal::prelude::*;
+use stm32f4xx_hal::stm32 as stm32f405;
+
 use ignore_result::Ignore;
 
 use pid_control::Controller;
@@ -13,8 +18,31 @@ use crate::motors::right::RightMotor;
 use crate::motors::Encoder;
 use crate::motors::Motor;
 
+use crate::vl6180x::VL6180x;
+
 use crate::uart::Command;
 use crate::uart::Uart;
+
+type FrontDistance = VL6180x<
+    I2c<
+        stm32f405::I2C1,
+        (gpiob::PB8<Alternate<AF4>>, gpiob::PB9<Alternate<AF4>>),
+    >,
+>;
+
+type LeftDistance = VL6180x<
+    I2c<
+        stm32f405::I2C2,
+        (gpiob::PB10<Alternate<AF4>>, gpiob::PB11<Alternate<AF4>>),
+    >,
+>;
+
+type RightDistance = VL6180x<
+    I2c<
+        stm32f405::I2C3,
+        (gpioa::PA8<Alternate<AF4>>, gpioc::PC9<Alternate<AF4>>),
+    >,
+>;
 
 pub struct BotConfig {
     pub left_p: f64,
@@ -291,6 +319,10 @@ pub struct Bot {
     right_power: f64,
     last_right_pos: f64,
 
+    front_distance: FrontDistance,
+    left_distance: LeftDistance,
+    right_distance: RightDistance,
+
     last_update: u32,
 
     pub config: BotConfig,
@@ -302,6 +334,9 @@ impl Bot {
         left_encoder: LeftEncoder,
         right_motor: RightMotor,
         right_encoder: RightEncoder,
+        mut front_distance: FrontDistance,
+        mut left_distance: LeftDistance,
+        mut right_distance: RightDistance,
         config: BotConfig,
     ) -> Bot {
         let mut left_pid =
@@ -311,6 +346,10 @@ impl Bot {
         let mut right_pid =
             PIDController::new(config.right_p, config.right_i, config.right_d);
         right_pid.set_limits(-5000.0, 5000.0);
+
+        front_distance.start_ranging();
+        left_distance.start_ranging();
+        right_distance.start_ranging();
 
         Bot {
             left_pid,
@@ -324,6 +363,9 @@ impl Bot {
             right_encoder,
             right_velocity: 0.0,
             right_power: 0.0,
+            front_distance,
+            left_distance,
+            right_distance,
             last_right_pos: 0.0,
             last_update: 0,
             config,
@@ -348,6 +390,10 @@ impl Bot {
 
     pub fn update(&mut self, now: u32) {
         let delta_time = now - self.last_update;
+
+        self.front_distance.update();
+        self.left_distance.update();
+        self.right_distance.update();
 
         if delta_time > 10 {
             self.left_pid.p_gain = self.config.left_p;
@@ -444,6 +490,18 @@ impl Bot {
 
     pub fn right_power(&self) -> f64 {
         self.right_power
+    }
+
+    pub fn front_distance(&self) -> Option<u8> {
+        self.front_distance.range()
+    }
+
+    pub fn left_distance(&self) -> Option<u8> {
+        self.left_distance.range()
+    }
+
+    pub fn right_distance(&self) -> Option<u8> {
+        self.right_distance.range()
     }
 }
 
