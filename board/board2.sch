@@ -2169,5 +2169,5 @@ F 3 "~" H 8300 3150 50  0001 C CNN
 	1    0    0    -1  
 $EndComp
 Text Notes 6950 4500 0    50   ~ 0
-ADC12_IN8
+ADC12_IN9
 $EndSCHEMATC
