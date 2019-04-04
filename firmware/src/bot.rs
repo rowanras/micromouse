@@ -2,7 +2,6 @@ use core::fmt::Write;
 
 use stm32f4xx_hal::gpio::{gpioa, gpiob, gpioc, Alternate, AF4};
 use stm32f4xx_hal::i2c::I2c;
-use stm32f4xx_hal::prelude::*;
 use stm32f4xx_hal::stm32 as stm32f405;
 
 use ignore_result::Ignore;
@@ -234,16 +233,16 @@ impl Bot {
         self.right_power
     }
 
-    pub fn front_distance(&self) -> Option<u8> {
-        self.front_distance.range()
+    pub fn front_distance(&self) -> f64 {
+        self.front_distance.range() as f64
     }
 
-    pub fn left_distance(&self) -> Option<u8> {
-        self.left_distance.range()
+    pub fn left_distance(&self) -> f64 {
+        self.left_distance.range() as f64
     }
 
-    pub fn right_distance(&self) -> Option<u8> {
-        self.right_distance.range()
+    pub fn right_distance(&self) -> f64 {
+        self.right_distance.range() as f64
     }
 }
 

@@ -15,6 +15,9 @@
  *  - wheelbase circumference: 229.336mm
  *  - ticks per spin: 2064.03
  *
+ *  Positive spin is clockwise (right)
+ *  Positive linear is forward
+ *
  */
 // pick a panicking behavior
 // you can put a breakpoint on `rust_begin_unwind` to catch panics
@@ -47,8 +50,6 @@ use crate::uart::Uart;
 
 use crate::motors::left::{LeftEncoder, LeftMotor};
 use crate::motors::right::{RightEncoder, RightMotor};
-
-use vl6180x::VL6180x;
 
 use crate::bot::Bot;
 use crate::config::BotConfig;
@@ -97,7 +98,10 @@ fn main() -> ! {
     let mut blue_led = gpiob.pb14.into_push_pull_output();
     let mut orange_led = gpiob.pb15.into_push_pull_output();
 
-    writeln!(uart, "Initializing");
+    orange_led.set_high();
+    blue_led.set_low();
+
+    writeln!(uart, "Initializing").ignore();
     uart.flush_tx(&mut time, 50);
 
     let mut front_distance = {
@@ -110,7 +114,7 @@ fn main() -> ! {
         let mut gpio1 = gpioc.pc1.into_open_drain_output();
         gpio1.set_high();
 
-        let mut i2c =
+        let i2c =
             stm32f4::i2c::I2c::i2c1(p.I2C1, (scl, sda), 100.khz(), clocks);
 
         time.delay(10000);
@@ -120,6 +124,9 @@ fn main() -> ! {
         distance.init_default();
         distance
     };
+
+    orange_led.set_low();
+    blue_led.set_high();
 
     let mut left_distance = {
         let scl = gpiob.pb10.into_open_drain_output().into_alternate_af4();
@@ -131,7 +138,7 @@ fn main() -> ! {
         let mut gpio1 = gpioc.pc3.into_open_drain_output();
         gpio1.set_high();
 
-        let mut i2c =
+        let i2c =
             stm32f4::i2c::I2c::i2c2(p.I2C2, (scl, sda), 100.khz(), clocks);
 
         time.delay(1000);
@@ -141,6 +148,9 @@ fn main() -> ! {
         distance.init_default();
         distance
     };
+
+    orange_led.set_high();
+    blue_led.set_high();
 
     let mut right_distance = {
         let scl = gpioa.pa8.into_open_drain_output().into_alternate_af4();
@@ -152,7 +162,7 @@ fn main() -> ! {
         let mut gpio1 = gpioc.pc5.into_open_drain_output();
         gpio1.set_high();
 
-        let mut i2c =
+        let i2c =
             stm32f4::i2c::I2c::i2c3(p.I2C3, (scl, sda), 100.khz(), clocks);
 
         time.delay(1000);
@@ -163,13 +173,15 @@ fn main() -> ! {
         distance
     };
 
-    writeln!(uart, "Reading id registers");
+    blue_led.set_low();
+
+    writeln!(uart, "Reading id registers").ignore();
     uart.flush_tx(&mut time, 50);
 
     for _ in 0..2 {
         let buf = front_distance.get_id_bytes();
 
-        writeln!(uart, "{:x?}", buf);
+        writeln!(uart, "{:x?}", buf).ignore();
         uart.flush_tx(&mut time, 50);
 
         orange_led.toggle();
@@ -178,7 +190,7 @@ fn main() -> ! {
     for _ in 0..2 {
         let buf = left_distance.get_id_bytes();
 
-        writeln!(uart, "{:x?}", buf);
+        writeln!(uart, "{:x?}", buf).ignore();
         uart.flush_tx(&mut time, 50);
 
         orange_led.toggle();
@@ -187,7 +199,7 @@ fn main() -> ! {
     for _ in 0..2 {
         let buf = right_distance.get_id_bytes();
 
-        writeln!(uart, "{:x?}", buf);
+        writeln!(uart, "{:x?}", buf).ignore();
         uart.flush_tx(&mut time, 50);
 
         orange_led.toggle();
@@ -195,30 +207,29 @@ fn main() -> ! {
 
     let config = BotConfig {
         left_p: 2000.0,
-        left_i: 2.0,
+        left_i: 4.0,
         left_d: 15000.0,
-
         right_p: 2000.0,
-        right_i: 2.0,
+        right_i: 4.0,
         right_d: 15000.0,
-
         spin_p: 0.01,
         spin_i: 0.0,
         spin_d: 0.0,
-        spin_err: 1.0,
+        spin_err: 3.0,
         spin_settle: 1000,
-
-        linear_p: 0.01,
+        linear_p: 0.02,
         linear_i: 0.0,
-        linear_d: 0.0,
-        linear_spin_p: 0.01,
-        linear_spin_i: 0.0,
+        linear_d: 0.1,
+        linear_spin_p: 0.015,
+        linear_spin_i: 0.000000002,
         linear_spin_d: 0.0,
-        linear_err: 0.5,
+        linear_spin_pos_p: 2.0,
+        linear_err: 3.0,
         linear_settle: 1000,
-
         ticks_per_spin: 2064.03,
         ticks_per_cell: 1620.0,
+        cell_width: 180.0,
+        cell_offset: 53.0,
     };
 
     let bot = Bot::new(
@@ -272,27 +283,25 @@ fn main() -> ! {
             if report {
                 writeln!(
                     uart,
-                    "{}\t{}\t{}\t{:.2}\t{:.2}\t{}\t{}\t{}\t{}\t{}",
+                    "{}\t{}\t{}\t{:.2}\t{:.2}\t{}\t{}\t{}",
                     now,
-                    control.bot().left_pos(),
-                    control.bot().right_pos(),
+                    //control.bot().left_pos(),
+                    //control.bot().right_pos(),
                     //control.bot().right_target(),
                     //control.bot().spin_pos(),
                     //control.bot().left_velocity(),
                     //control.bot().right_velocity(),
                     //control.bot().left_power(),
                     //control.bot().right_power(),
+                    control.bot().linear_pos(),
+                    control.bot().spin_pos(),
                     control.bot().linear_velocity(),
                     control.bot().spin_velocity(),
                     //control.bot().linear_pos(),
-                    //control.bot().spin_pos(),
-                    //control.bot().linear_pos(),
                     //control.currnt_move_name(),
-                    control.bot().front_distance().unwrap_or(245),
-                    control.bot().left_distance().unwrap_or(245),
-                    control.bot().right_distance().unwrap_or(245),
-                    battery.raw(),
-                    battery.is_dead(),
+                    control.bot().front_distance(),
+                    control.bot().left_distance(),
+                    control.bot().right_distance(),
                 )
                 .ignore();
             }

@@ -20,7 +20,7 @@ pub trait Command {
     );
 }
 
-const BUFFER_LEN: usize = 64;
+const BUFFER_LEN: usize = 1024;
 
 static UART: Mutex<RefCell<Option<stm32f405::USART1>>> =
     Mutex::new(RefCell::new(None));

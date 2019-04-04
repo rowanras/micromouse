@@ -5,6 +5,7 @@ use ignore_result::Ignore;
 use crate::uart::Uart;
 use crate::uart::Command;
 
+#[derive(Debug)]
 pub struct BotConfig {
     pub left_p: f64,
     pub left_i: f64,
@@ -26,11 +27,15 @@ pub struct BotConfig {
     pub linear_spin_p: f64,
     pub linear_spin_i: f64,
     pub linear_spin_d: f64,
+    pub linear_spin_pos_p: f64,
     pub linear_err: f64,
     pub linear_settle: u32,
 
     pub ticks_per_spin: f64,
     pub ticks_per_cell: f64,
+
+    pub cell_width: f64,
+    pub cell_offset: f64,
 }
 
 impl Command for BotConfig {
@@ -235,6 +240,18 @@ impl Command for BotConfig {
                         .ignore();
                 }
             }
+            Some("linear_spin_pos_p") => {
+                if let Some(arg) = args.next() {
+                    if let Ok(v) = arg.parse() {
+                        self.linear_spin_pos_p = v;
+                    } else {
+                        writeln!(uart, "invalid value").ignore();
+                    }
+                } else {
+                    writeln!(uart, "linear_spin_pos_p: {}", self.linear_spin_pos_p)
+                        .ignore();
+                }
+            }
             Some("linear_err") => {
                 if let Some(arg) = args.next() {
                     if let Ok(v) = arg.parse() {
@@ -258,9 +275,33 @@ impl Command for BotConfig {
                         .ignore();
                 }
             }
+            Some("cell_width") => {
+                if let Some(arg) = args.next() {
+                    if let Ok(v) = arg.parse() {
+                        self.cell_width= v;
+                    } else {
+                        writeln!(uart, "invalid value").ignore();
+                    }
+                } else {
+                    writeln!(uart, "cell_width:: {}", self.cell_width)
+                        .ignore();
+                }
+            }
+            Some("cell_offset") => {
+                if let Some(arg) = args.next() {
+                    if let Ok(v) = arg.parse() {
+                        self.cell_offset= v;
+                    } else {
+                        writeln!(uart, "invalid value").ignore();
+                    }
+                } else {
+                    writeln!(uart, "cell_offset:: {}", self.cell_offset)
+                        .ignore();
+                }
+            }
 
             Some(_) => writeln!(uart, "config: unknown key").ignore(),
-            None => writeln!(uart, "config: Need a key").ignore(),
+            None => writeln!(uart, "{:#?}", &self).ignore(),
         }
     }
 }

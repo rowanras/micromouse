@@ -1,9 +1,12 @@
+
+use ignore_result::Ignore;
+
 use embedded_hal::blocking::i2c;
-use stm32f4xx_hal::i2c::I2c;
 
 pub const DEFAULT_ADDRESS: u8 = 0x29;
 
 mod registers {
+    #![allow(dead_code)]
     pub const IDENTIFICATION__MODEL_ID: u16 = 0x000;
     pub const IDENTIFICATION__MODEL_REV_MAJOR: u16 = 0x001;
     pub const IDENTIFICATION__MODEL_REV_MINOR: u16 = 0x002;
@@ -82,7 +85,7 @@ where
     scaling: u8,
     ptp_offset: u8,
 
-    range: Option<u8>,
+    range: u8,
 }
 
 impl<I2C> VL6180x<I2C>
@@ -95,36 +98,36 @@ where
             address,
             scaling: 1,
             ptp_offset: 0,
-            range: None,
+            range: 255,
         }
     }
 
     fn write_u8(&mut self, reg: u16, data: u8) {
-        let mut buf = [((reg >> 8) & 0xff) as u8, (reg & 0xff) as u8, data];
-        self.i2c.write(self.address, &buf);
+        let buf = [((reg >> 8) & 0xff) as u8, (reg & 0xff) as u8, data];
+        self.i2c.write(self.address, &buf).ignore();
     }
 
     fn write_u16(&mut self, reg: u16, data: u16) {
-        let mut buf = [
+        let buf = [
             ((reg >> 8) & 0xff) as u8,
             (reg & 0xff) as u8,
             ((data >> 8) & 0xff) as u8,
             (data & 0xff) as u8,
         ];
-        self.i2c.write(self.address, &buf);
+        self.i2c.write(self.address, &buf).ignore();
     }
 
     fn read_u8(&mut self, reg: u16) -> u8 {
         let mut buf = [0; 1];
-        self.i2c.write(self.address, &reg.to_be_bytes());
-        self.i2c.read(self.address, &mut buf);
+        self.i2c.write(self.address, &reg.to_be_bytes()).ignore();
+        self.i2c.read(self.address, &mut buf).ignore();
         u8::from_be_bytes(buf)
     }
 
     fn read_u16(&mut self, reg: u16) -> u16 {
         let mut buf = [0; 2];
-        self.i2c.write(self.address, &reg.to_be_bytes());
-        self.i2c.read(self.address, &mut buf);
+        self.i2c.write(self.address, &reg.to_be_bytes()).ignore();
+        self.i2c.read(self.address, &mut buf).ignore();
         u16::from_be_bytes(buf)
     }
 
@@ -257,7 +260,7 @@ where
     // VL6180x_UpscaleSetScaling() in vl6180x_api.c.
     fn set_scaling(&mut self, new_scaling: u8) {
         // default value of SYSRANGE__CROSSTALK_VALID_HEIGHT
-        let DefaultCrosstalkValidHeight = 20;
+        let default_crosstalk_valid_height = 20;
 
         // do nothing if scaling value is invalid
         if new_scaling < 1 || new_scaling > 3 {
@@ -282,7 +285,7 @@ where
         // apply scaling on CrossTalkValidHeight
         self.write_u8(
             registers::SYSRANGE__CROSSTALK_VALID_HEIGHT,
-            DefaultCrosstalkValidHeight / scaling,
+            default_crosstalk_valid_height / scaling,
         );
 
         // This function does not apply scaling to RANGE_IGNORE_VALID_HEIGHT.
@@ -349,14 +352,11 @@ where
             self.write_u8(registers::SYSTEM__INTERRUPT_CLEAR, 0x01);
             self.start_ranging();
 
-            self.range = match range {
-                255 => None,
-                val => Some(val),
-            };
+            self.range = range;
         }
     }
 
-    pub fn range(&self) -> Option<u8> {
+    pub fn range(&self) -> u8 {
         self.range
     }
 }

@@ -69,6 +69,8 @@ impl SpinMove {
 pub struct LinearMove {
     linear_pid: PIDController,
     spin_pid: PIDController,
+    last_linear_ok: bool,
+    last_spin_ok: bool,
     err: f64,
     settle: u32,
     last_ok: u32,
@@ -82,6 +84,7 @@ impl LinearMove {
             config.linear_i,
             config.linear_d,
         );
+
         linear_pid.set_limits(-2.0, 2.0);
         linear_pid.d_mode = DerivativeMode::OnMeasurement;
         linear_pid.set_target(target);
@@ -91,6 +94,7 @@ impl LinearMove {
             config.linear_spin_i,
             config.linear_spin_d,
         );
+
         spin_pid.set_limits(-2.0, 2.0);
         spin_pid.d_mode = DerivativeMode::OnMeasurement;
         spin_pid.set_target(0.0);
@@ -98,6 +102,8 @@ impl LinearMove {
         LinearMove {
             linear_pid,
             spin_pid,
+            last_linear_ok: false,
+            last_spin_ok: false,
             err: config.linear_err,
             settle: config.linear_settle,
             last_update: 0,
@@ -113,16 +119,47 @@ impl LinearMove {
      */
     pub fn update(&mut self, now: u32, bot: &mut Bot) -> bool {
         let linear_pos = bot.linear_pos();
+        let linear_error = linear_pos - self.linear_pid.target();
+        let linear_ok = linear_error < self.err && linear_error > -self.err;
+
+        if linear_ok && !self.last_linear_ok {
+            self.linear_pid.reset();
+        }
+
+        self.last_linear_ok = linear_ok;
+
+        let left_distance = bot.left_distance();
+        let right_distance = bot.right_distance();
+
+        let width = left_distance + right_distance;
+
+        let spin_target = bot.config.linear_spin_pos_p * if linear_ok {
+            0.0
+        } else {
+            if width <= bot.config.cell_width {
+                right_distance - left_distance
+            } else if left_distance < right_distance {
+                bot.config.cell_offset - left_distance
+            } else if right_distance < left_distance {
+                right_distance - bot.config.cell_offset
+            } else {
+                0.0
+            }
+        };
+
+        self.spin_pid.set_target(spin_target);
+
         let spin_pos = bot.spin_pos();
 
-        let linear_error = linear_pos - self.linear_pid.target();
-        let spin_error = spin_pos - self.spin_pid.target();
+        let spin_ok = spin_pos < self.err && spin_pos > -self.err;
 
-        if linear_error > self.err
-            || linear_error < -self.err
-            || spin_error > self.err
-            || spin_error < -self.err
-        {
+        if spin_ok && !self.last_linear_ok {
+            self.spin_pid.reset();
+        }
+
+        self.last_spin_ok = spin_ok;
+
+        if !linear_ok || !spin_ok {
             self.last_ok = now;
         }
 

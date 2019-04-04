@@ -60,8 +60,13 @@ impl Motor for RightMotor {
                 self.timer.ccr1.write(|w| w.ccr1().bits(speed));
                 self.timer.ccr2.write(|w| w.ccr2().bits(speed));
                 w.cc1e().clear_bit().cc2e().set_bit()
-            } else {
+            } else if power < 0 {
                 let speed = (power.abs() + BACKWARD_DEADBAND) as u32;
+                self.timer.ccr1.write(|w| w.ccr1().bits(speed));
+                self.timer.ccr2.write(|w| w.ccr2().bits(speed));
+                w.cc1e().set_bit().cc2e().clear_bit()
+            } else {
+                let speed = 0;
                 self.timer.ccr1.write(|w| w.ccr1().bits(speed));
                 self.timer.ccr2.write(|w| w.ccr2().bits(speed));
                 w.cc1e().set_bit().cc2e().clear_bit()
