@@ -2,13 +2,11 @@ use core::fmt::Write;
 
 use ignore_result::Ignore;
 
-use rand::rngs::SmallRng;
-use rand::SeedableRng;
-use rand::Rng;
-
 use arrayvec::ArrayVec;
 
 use crate::control::Control;
+
+use crate::navigate::Navigate;
 
 use crate::uart::Uart;
 use crate::uart::Command;
@@ -21,20 +19,30 @@ pub enum Move {
     Forward,
 }
 
-pub struct Plan {
-    control: Control,
-    move_buffer: ArrayVec<[Move; 32]>,
-    rng: SmallRng,
-    going: bool,
+pub struct MoveOptions {
+    pub forward: bool,
+    pub left: bool,
+    pub right: bool,
 }
 
-impl Plan {
-    pub fn new(control: Control) -> Plan {
+pub struct Plan<N>
+where N: Navigate
+{
+    control: Control,
+    move_buffer: ArrayVec<[Move; 32]>,
+    going: bool,
+    navigate: N,
+}
+
+impl<N> Plan<N>
+where N: Navigate
+{
+    pub fn new(control: Control, navigate: N) -> Plan<N> {
         Plan {
             control,
             move_buffer: ArrayVec::new(),
-            rng: SmallRng::from_seed([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]),
             going: false,
+            navigate
         }
     }
 
@@ -52,60 +60,15 @@ impl Plan {
             } else {
                 if self.going {
                     let threshold = self.control.bot().config.wall_threshold;
-                    let possible_directions = (
-                        self.control.bot().left_distance() > threshold,
-                        self.control.bot().front_distance() > threshold,
-                        self.control.bot().right_distance() > threshold,
-                    );
-
-                    let next_moves: &[Move] = match possible_directions {
-                        (true, true, true) => {
-                            match self.rng.gen_range(0, 3) {
-                                0 => &[Move::TurnLeft, Move::Forward],
-                                1 => &[Move::TurnRight, Move::Forward],
-                                _ => &[Move::Forward],
-                            }
-                        }
-
-                        (true, false, true) => {
-                            match self.rng.gen_range(0, 2) {
-                                0 => &[Move::TurnLeft, Move::Forward],
-                                _ => &[Move::TurnRight, Move::Forward],
-                            }
-                        }
-
-                        (false, true, true) => {
-                            match self.rng.gen_range(0, 2) {
-                                0 => &[Move::TurnRight, Move::Forward],
-                                _ => &[Move::Forward],
-                            }
-                        }
-
-                        (true, true, false) => {
-                            match self.rng.gen_range(0, 2) {
-                                0 => &[Move::TurnLeft, Move::Forward],
-                                _ => &[Move::Forward],
-                            }
-                        }
-
-                        (false, true, false) => {
-                            &[Move::Forward]
-                        }
-
-                        (true, false, false) => {
-                            &[Move::TurnLeft, Move::Forward]
-                        }
-
-                        (false, false, true) => {
-                            &[Move::TurnRight, Move::Forward]
-                        }
-
-                        (false, false, false) => {
-                            &[Move::TurnAround, Move::Forward]
-                        }
+                    let move_options = MoveOptions {
+                        left: self.control.bot().left_distance() > threshold,
+                        forward: self.control.bot().front_distance() > threshold,
+                        right: self.control.bot().right_distance() > threshold,
                     };
 
-                    self.add_moves(next_moves);
+                    let next_moves = self.navigate.navigate(move_options);
+
+                    self.add_moves(&next_moves);
                 }
             }
         }
@@ -113,9 +76,11 @@ impl Plan {
         self.control.update(now);
     }
 
-    pub fn add_moves(&mut self, next_moves: &[Move]) {
+    pub fn add_moves(&mut self, next_moves: &[Option<Move>]) {
         for &next_move in next_moves {
-            self.move_buffer.try_push(next_move);
+            if let Some(m) = next_move {
+                self.move_buffer.try_push(m);
+            }
         }
     }
 
@@ -133,7 +98,9 @@ impl Plan {
     }
 }
 
-impl Command for Plan {
+impl<N> Command for Plan<N>
+where N: Navigate
+{
     fn keyword_command(&self) -> &str {
         "plan"
     }
@@ -149,10 +116,10 @@ impl Command for Plan {
             self.control.handle_command(uart, args);
         } else {
             match command {
-                Some("left") => self.add_moves(&[Move::TurnLeft]),
-                Some("right") => self.add_moves(&[Move::TurnRight]),
-                Some("around") => self.add_moves(&[Move::TurnAround]),
-                Some("forward") => self.add_moves(&[Move::Forward]),
+                Some("left") => self.add_moves(&[Some(Move::TurnLeft)]),
+                Some("right") => self.add_moves(&[Some(Move::TurnRight)]),
+                Some("around") => self.add_moves(&[Some(Move::TurnAround)]),
+                Some("forward") => self.add_moves(&[Some(Move::Forward)]),
                 Some("go") => self.go(),
                 Some("stop") => self.stop(),
                 _ => writeln!(uart, "plan: unknown command").ignore(),

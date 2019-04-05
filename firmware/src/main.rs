@@ -27,6 +27,7 @@ pub mod battery;
 pub mod bot;
 pub mod config;
 pub mod control;
+pub mod navigate;
 pub mod motors;
 pub mod plan;
 pub mod time;
@@ -57,6 +58,8 @@ use crate::config::BotConfig;
 use crate::control::Control;
 
 use crate::plan::Plan;
+
+use crate::navigate::RandomNavigate;
 
 // Setup the master clock out
 pub fn mco2_setup(rcc: &stm32f405::RCC, gpioc: &stm32f405::GPIOC) {
@@ -217,7 +220,7 @@ fn main() -> ! {
         spin_p: 0.01,
         spin_i: 0.0,
         spin_d: 0.0,
-        spin_err: 3.0,
+        spin_err: 15.0,
         spin_settle: 1000,
         linear_p: 0.02,
         linear_i: 0.0,
@@ -226,7 +229,7 @@ fn main() -> ! {
         linear_spin_i: 0.000000002,
         linear_spin_d: 0.0,
         linear_spin_pos_p: 2.0,
-        linear_err: 3.0,
+        linear_err: 10.0,
         linear_settle: 1000,
         ticks_per_spin: 2064.03,
         ticks_per_cell: 1620.0,
@@ -248,14 +251,16 @@ fn main() -> ! {
 
     let control = Control::new(bot);
 
-    let mut plan = Plan::new(control);
+    let navigate = RandomNavigate::new([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+
+    let mut plan = Plan::new(control, navigate);
 
     writeln!(uart, "\n\nstart").ignore();
     uart.flush_tx(&mut time, 1000);
 
     let mut last_time: u32 = 0;
 
-    let mut report = true;
+    let mut report = false;
 
     loop {
         let now: u32 = time.now();
