@@ -36,6 +36,7 @@ pub struct BotConfig {
 
     pub cell_width: f64,
     pub cell_offset: f64,
+    pub wall_threshold: f64,
 }
 
 impl Command for BotConfig {
@@ -296,6 +297,18 @@ impl Command for BotConfig {
                     }
                 } else {
                     writeln!(uart, "cell_offset:: {}", self.cell_offset)
+                        .ignore();
+                }
+            }
+            Some("wall_threshold") => {
+                if let Some(arg) = args.next() {
+                    if let Ok(v) = arg.parse() {
+                        self.wall_threshold= v;
+                    } else {
+                        writeln!(uart, "invalid value").ignore();
+                    }
+                } else {
+                    writeln!(uart, "wall_threshold:: {}", self.cell_offset)
                         .ignore();
                 }
             }

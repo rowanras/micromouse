@@ -56,6 +56,8 @@ use crate::config::BotConfig;
 
 use crate::control::Control;
 
+use crate::plan::Plan;
+
 // Setup the master clock out
 pub fn mco2_setup(rcc: &stm32f405::RCC, gpioc: &stm32f405::GPIOC) {
     rcc.ahb1enr.write(|w| w.gpiocen().set_bit());
@@ -230,6 +232,7 @@ fn main() -> ! {
         ticks_per_cell: 1620.0,
         cell_width: 180.0,
         cell_offset: 53.0,
+        wall_threshold: 120.0,
     };
 
     let bot = Bot::new(
@@ -243,7 +246,9 @@ fn main() -> ! {
         config,
     );
 
-    let mut control = Control::new(bot);
+    let control = Control::new(bot);
+
+    let mut plan = Plan::new(control);
 
     writeln!(uart, "\n\nstart").ignore();
     uart.flush_tx(&mut time, 1000);
@@ -270,8 +275,8 @@ fn main() -> ! {
 
                     let command = args.next();
 
-                    if command == Some(control.keyword_command()) {
-                        control.handle_command(&mut uart, args);
+                    if command == Some(plan.keyword_command()) {
+                        plan.handle_command(&mut uart, args);
                     } else {
                         writeln!(uart, "Invalid Command!").ignore();
                     }
@@ -293,22 +298,22 @@ fn main() -> ! {
                     //control.bot().right_velocity(),
                     //control.bot().left_power(),
                     //control.bot().right_power(),
-                    control.bot().linear_pos(),
-                    control.bot().spin_pos(),
-                    control.bot().linear_velocity(),
-                    control.bot().spin_velocity(),
+                    plan.control().bot().linear_pos(),
+                    plan.control().bot().spin_pos(),
+                    plan.control().bot().linear_velocity(),
+                    plan.control().bot().spin_velocity(),
                     //control.bot().linear_pos(),
                     //control.currnt_move_name(),
-                    control.bot().front_distance(),
-                    control.bot().left_distance(),
-                    control.bot().right_distance(),
+                    plan.control().bot().left_distance(),
+                    plan.control().bot().front_distance(),
+                    plan.control().bot().right_distance(),
                 )
                 .ignore();
             }
 
             green_led.toggle();
 
-            if control.is_idle() {
+            if plan.control().is_idle() {
                 blue_led.set_low();
             } else {
                 blue_led.set_high();
@@ -323,7 +328,7 @@ fn main() -> ! {
             last_time = now;
         }
 
-        control.update(now);
+        plan.update(now);
         battery.update(now);
         uart.flush_tx(&mut time, 50);
     }

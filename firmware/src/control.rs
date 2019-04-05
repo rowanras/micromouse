@@ -266,6 +266,12 @@ impl Control {
             CurrentMove::Idle => "idle",
         }
     }
+
+    pub fn stop(&mut self) {
+        self.bot.change_velocity(0.0, 0.0);
+        self.bot.reset();
+        self.current_move = CurrentMove::Idle;
+    }
 }
 
 impl Command for Control {
