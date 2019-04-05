@@ -133,25 +133,24 @@ impl LinearMove {
 
         let width = left_distance + right_distance;
 
-        let spin_target = bot.config.linear_spin_pos_p * if linear_ok {
-            0.0
-        } else {
-            if width <= bot.config.cell_width {
-                right_distance - left_distance
-            } else if left_distance < right_distance {
-                bot.config.cell_offset - left_distance
-            } else if right_distance < left_distance {
-                right_distance - bot.config.cell_offset
-            } else {
-                0.0
-            }
-        };
+        if !linear_ok {
+            let spin_target = bot.config.linear_spin_pos_p *
+                if width <= bot.config.cell_width {
+                    right_distance - left_distance
+                } else if left_distance < right_distance {
+                    bot.config.cell_offset - left_distance
+                } else if right_distance < left_distance {
+                    right_distance - bot.config.cell_offset
+                } else {
+                    0.0
+                };
+            self.spin_pid.set_target(spin_target);
+        }
 
-        self.spin_pid.set_target(spin_target);
 
         let spin_pos = bot.spin_pos();
-
-        let spin_ok = spin_pos < self.err && spin_pos > -self.err;
+        let spin_error = spin_pos - self.spin_pid.target();
+        let spin_ok = spin_error < self.err && spin_error > -self.err;
 
         if spin_ok && !self.last_linear_ok {
             self.spin_pid.reset();
