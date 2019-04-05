@@ -28,7 +28,8 @@ version = "0.5.8"
 features = ["const-fn"]
 
 [dependencies.stm32f4xx-hal]
-path = "../../stm32f4xx-hal"
+#path = "../../stm32f4xx-hal"
+git = "https://github.com/timothyhollabaugh/stm32f4xx-hal"
 version = "0.3.0"
 features = ["stm32f405", "rt"]
 
