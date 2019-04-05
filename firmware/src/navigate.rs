@@ -25,7 +25,7 @@ impl RandomNavigate {
 
 impl Navigate for RandomNavigate {
     fn navigate(&mut self, move_options: MoveOptions) -> [Option<Move>; 2] {
-        match (move_options.left, move_options.right, move_options.right) {
+        match (move_options.left, move_options.forward, move_options.right) {
             (true, true, true) => {
                 match self.rng.gen_range(0, 3) {
                     0 => [Some(Move::TurnLeft), Some(Move::Forward)],
