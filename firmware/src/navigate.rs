@@ -32,10 +32,11 @@ impl LessRandomNavigate {
     }
 
     fn get_cell(&self, x: i32, y: i32) -> u8 {
-        let x = if x < 0 { 0 } else if x > 15 { 15 } else { x } as usize;
-        let y = if y < 0 { 0 } else if y > 15 { 15 } else { y } as usize;
-
-        self.cells[x][y]
+        if x >= 0 && x <= 15 && y >= 0 && y <= 15 {
+            self.cells[x as usize][y as usize]
+        } else {
+            255
+        }
     }
 }
 
@@ -70,11 +71,23 @@ impl Navigate for LessRandomNavigate {
             Direction::Left => self.get_cell(x, y+1),
         };
 
-        if move_options.forward && front_cell <= left_cell && front_cell <= right_cell {
+        if
+            move_options.forward &&
+            front_cell <= left_cell &&
+            front_cell <= right_cell
+        {
             [Some(Move::Forward), None]
-        } else if move_options.left && left_cell <= front_cell && left_cell <= right_cell {
+        } else if
+            move_options.left &&
+            left_cell <= front_cell &&
+            left_cell <= right_cell
+        {
             [Some(Move::TurnLeft), Some(Move::Forward)]
-        } else if move_options.right && right_cell <= front_cell && right_cell <= left_cell {
+        } else if
+            move_options.right &&
+            right_cell <= front_cell &&
+            right_cell <= left_cell
+        {
             [Some(Move::TurnRight), Some(Move::Forward)]
         } else {
             [Some(Move::TurnAround), Some(Move::Forward)]

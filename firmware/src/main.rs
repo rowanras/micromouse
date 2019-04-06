@@ -227,7 +227,7 @@ fn main() -> ! {
         spin_i: 0.0,
         spin_d: 0.0,
         spin_err: 15.0,
-        spin_settle: 250,
+        spin_settle: 50,
         linear_p: 0.0185,
         linear_i: 0.0,
         linear_d: 0.1,
@@ -237,7 +237,7 @@ fn main() -> ! {
         linear_spin_pos_p: 2.0,
         linear_err: 10.0,
         linear_front_err: 5.0,
-        linear_settle: 250,
+        linear_settle: 50,
         ticks_per_spin: 2064.03,
         ticks_per_cell: 1620.0,
         cell_width: 180.0,
@@ -259,15 +259,15 @@ fn main() -> ! {
 
     let control = Control::new(bot);
 
-    let navigate = RandomNavigate::new([
-        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-    ]);
-
     /*
+    let navigate = RandomNavigate::new([
+        15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
+    ]);
+    */
+
     let navigate = LessRandomNavigate::new([
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
     ]);
-    */
 
     let mut plan = Plan::new(control, navigate);
 
@@ -309,11 +309,11 @@ fn main() -> ! {
             if report {
                 writeln!(
                     uart,
-                    "{}\t{}\t{}",
-                    now,
-                    //plan.x_pos(),
-                    //plan.y_pos(),
-                    //plan.direction(),
+                    "{}\t{}\t{:?}",
+                    //now,
+                    plan.x_pos(),
+                    plan.y_pos(),
+                    plan.direction(),
                     //control.bot().left_pos(),
                     //control.bot().right_pos(),
                     //control.bot().right_target(),
@@ -322,8 +322,8 @@ fn main() -> ! {
                     //control.bot().right_velocity(),
                     //control.bot().left_power(),
                     //control.bot().right_power(),
-                    plan.control().bot().linear_pos(),
-                    plan.control().bot().spin_pos(),
+                    //plan.control().bot().linear_pos(),
+                    //plan.control().bot().spin_pos(),
                     //plan.control().bot().linear_velocity(),
                     //plan.control().bot().spin_velocity(),
                     //control.bot().linear_pos(),

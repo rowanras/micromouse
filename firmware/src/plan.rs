@@ -102,8 +102,7 @@ where
 
                     Move::TurnAround => {
                         self.control.spin(ticks_per_spin / 2.0);
-                        self.direction().turn_right();
-                        self.direction().turn_right();
+                        self.direction = self.direction().turn_right().turn_right();
                     }
 
                     Move::Forward => {
