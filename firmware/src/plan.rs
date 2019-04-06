@@ -8,8 +8,8 @@ use crate::control::Control;
 
 use crate::navigate::Navigate;
 
-use crate::uart::Uart;
 use crate::uart::Command;
+use crate::uart::Uart;
 
 #[derive(Copy, Clone)]
 pub enum Move {
@@ -26,7 +26,8 @@ pub struct MoveOptions {
 }
 
 pub struct Plan<N>
-where N: Navigate
+where
+    N: Navigate,
 {
     control: Control,
     move_buffer: ArrayVec<[Move; 32]>,
@@ -35,14 +36,15 @@ where N: Navigate
 }
 
 impl<N> Plan<N>
-where N: Navigate
+where
+    N: Navigate,
 {
     pub fn new(control: Control, navigate: N) -> Plan<N> {
         Plan {
             control,
             move_buffer: ArrayVec::new(),
             going: false,
-            navigate
+            navigate,
         }
     }
 
@@ -52,9 +54,9 @@ where N: Navigate
                 let ticks_per_spin = self.control.bot().config.ticks_per_spin;
                 let ticks_per_cell = self.control.bot().config.ticks_per_cell;
                 match next_move {
-                    Move::TurnLeft => self.control.spin(-ticks_per_spin/4.0),
-                    Move::TurnRight => self.control.spin(ticks_per_spin/4.0),
-                    Move::TurnAround => self.control.spin(ticks_per_spin/2.0),
+                    Move::TurnLeft => self.control.spin(-ticks_per_spin / 4.0),
+                    Move::TurnRight => self.control.spin(ticks_per_spin / 4.0),
+                    Move::TurnAround => self.control.spin(ticks_per_spin / 2.0),
                     Move::Forward => self.control.linear(ticks_per_cell),
                 }
             } else {
@@ -62,7 +64,8 @@ where N: Navigate
                     let threshold = self.control.bot().config.wall_threshold;
                     let move_options = MoveOptions {
                         left: self.control.bot().left_distance() > threshold,
-                        forward: self.control.bot().front_distance() > threshold,
+                        forward: self.control.bot().front_distance()
+                            > threshold,
                         right: self.control.bot().right_distance() > threshold,
                     };
 
@@ -93,13 +96,14 @@ where N: Navigate
     }
 
     pub fn stop(&mut self) {
-        self.going  = false;
+        self.going = false;
         self.control.stop();
     }
 }
 
 impl<N> Command for Plan<N>
-where N: Navigate
+where
+    N: Navigate,
 {
     fn keyword_command(&self) -> &str {
         "plan"

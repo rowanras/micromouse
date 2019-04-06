@@ -69,6 +69,7 @@ impl SpinMove {
 pub struct LinearMove {
     linear_pid: PIDController,
     spin_pid: PIDController,
+    linear_target: f64,
     last_linear_ok: bool,
     last_spin_ok: bool,
     err: f64,
@@ -102,6 +103,7 @@ impl LinearMove {
         LinearMove {
             linear_pid,
             spin_pid,
+            linear_target: target,
             last_linear_ok: false,
             last_spin_ok: false,
             err: config.linear_err,
@@ -118,9 +120,27 @@ impl LinearMove {
      *  false if it is not done.
      */
     pub fn update(&mut self, now: u32, bot: &mut Bot) -> bool {
-        let linear_pos = bot.linear_pos();
+        let front_distance = bot.front_distance();
+
+        let (linear_pos, linear_target, linear_err) =
+            if front_distance <= bot.config.cell_width {
+                (
+                    -front_distance * 9.0,
+                    -bot.config.front_wall_distance * 9.0,
+                    bot.config.linear_front_err * 9.0
+                )
+            } else {
+                (
+                    bot.linear_pos(),
+                    self.linear_target,
+                    bot.config.linear_err
+                )
+            };
+
+        self.linear_pid.set_target(linear_target);
+
         let linear_error = linear_pos - self.linear_pid.target();
-        let linear_ok = linear_error < self.err && linear_error > -self.err;
+        let linear_ok = linear_error < linear_err && linear_error > -linear_err;
 
         if linear_ok && !self.last_linear_ok {
             self.linear_pid.reset();

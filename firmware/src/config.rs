@@ -2,8 +2,8 @@ use core::fmt::Write;
 
 use ignore_result::Ignore;
 
-use crate::uart::Uart;
 use crate::uart::Command;
+use crate::uart::Uart;
 
 #[derive(Debug)]
 pub struct BotConfig {
@@ -29,6 +29,7 @@ pub struct BotConfig {
     pub linear_spin_d: f64,
     pub linear_spin_pos_p: f64,
     pub linear_err: f64,
+    pub linear_front_err: f64,
     pub linear_settle: u32,
 
     pub ticks_per_spin: f64,
@@ -37,6 +38,7 @@ pub struct BotConfig {
     pub cell_width: f64,
     pub cell_offset: f64,
     pub wall_threshold: f64,
+    pub front_wall_distance: f64,
 }
 
 impl Command for BotConfig {
@@ -249,8 +251,12 @@ impl Command for BotConfig {
                         writeln!(uart, "invalid value").ignore();
                     }
                 } else {
-                    writeln!(uart, "linear_spin_pos_p: {}", self.linear_spin_pos_p)
-                        .ignore();
+                    writeln!(
+                        uart,
+                        "linear_spin_pos_p: {}",
+                        self.linear_spin_pos_p
+                    )
+                    .ignore();
                 }
             }
             Some("linear_err") => {
@@ -262,6 +268,18 @@ impl Command for BotConfig {
                     }
                 } else {
                     writeln!(uart, "linear_err: {}", self.linear_err).ignore();
+                }
+            }
+            Some("linear_front_err") => {
+                if let Some(arg) = args.next() {
+                    if let Ok(v) = arg.parse() {
+                        self.linear_front_err = v;
+                    } else {
+                        writeln!(uart, "invalid value").ignore();
+                    }
+                } else {
+                    writeln!(uart, "linear_front_err: {}", self.linear_err)
+                        .ignore();
                 }
             }
             Some("linear_settle") => {
@@ -279,19 +297,18 @@ impl Command for BotConfig {
             Some("cell_width") => {
                 if let Some(arg) = args.next() {
                     if let Ok(v) = arg.parse() {
-                        self.cell_width= v;
+                        self.cell_width = v;
                     } else {
                         writeln!(uart, "invalid value").ignore();
                     }
                 } else {
-                    writeln!(uart, "cell_width:: {}", self.cell_width)
-                        .ignore();
+                    writeln!(uart, "cell_width:: {}", self.cell_width).ignore();
                 }
             }
             Some("cell_offset") => {
                 if let Some(arg) = args.next() {
                     if let Ok(v) = arg.parse() {
-                        self.cell_offset= v;
+                        self.cell_offset = v;
                     } else {
                         writeln!(uart, "invalid value").ignore();
                     }
@@ -303,13 +320,29 @@ impl Command for BotConfig {
             Some("wall_threshold") => {
                 if let Some(arg) = args.next() {
                     if let Ok(v) = arg.parse() {
-                        self.wall_threshold= v;
+                        self.wall_threshold = v;
                     } else {
                         writeln!(uart, "invalid value").ignore();
                     }
                 } else {
                     writeln!(uart, "wall_threshold:: {}", self.cell_offset)
                         .ignore();
+                }
+            }
+            Some("front_wall_distance") => {
+                if let Some(arg) = args.next() {
+                    if let Ok(v) = arg.parse() {
+                        self.front_wall_distance = v;
+                    } else {
+                        writeln!(uart, "invalid value").ignore();
+                    }
+                } else {
+                    writeln!(
+                        uart,
+                        "front_wall_distance:: {}",
+                        self.cell_offset
+                    )
+                    .ignore();
                 }
             }
 

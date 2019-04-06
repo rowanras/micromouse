@@ -27,8 +27,8 @@ pub mod battery;
 pub mod bot;
 pub mod config;
 pub mod control;
-pub mod navigate;
 pub mod motors;
+pub mod navigate;
 pub mod plan;
 pub mod time;
 pub mod uart;
@@ -183,6 +183,7 @@ fn main() -> ! {
     };
 
     blue_led.set_low();
+    orange_led.set_low();
 
     writeln!(uart, "Reading id registers").ignore();
     uart.flush_tx(&mut time, 50);
@@ -234,12 +235,14 @@ fn main() -> ! {
         linear_spin_d: 0.0,
         linear_spin_pos_p: 2.0,
         linear_err: 10.0,
+        linear_front_err: 5.0,
         linear_settle: 1000,
         ticks_per_spin: 2064.03,
         ticks_per_cell: 1620.0,
         cell_width: 180.0,
         cell_offset: 53.0,
         wall_threshold: 120.0,
+        front_wall_distance: 35.0,
     };
 
     let bot = Bot::new(
@@ -255,7 +258,9 @@ fn main() -> ! {
 
     let control = Control::new(bot);
 
-    let navigate = RandomNavigate::new([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+    let navigate = RandomNavigate::new([
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    ]);
 
     let mut plan = Plan::new(control, navigate);
 
@@ -297,7 +302,7 @@ fn main() -> ! {
             if report {
                 writeln!(
                     uart,
-                    "{}\t{}\t{}\t{:.2}\t{:.2}\t{}\t{}\t{}",
+                    "{}\t{}\t{}",
                     now,
                     //control.bot().left_pos(),
                     //control.bot().right_pos(),
@@ -308,14 +313,14 @@ fn main() -> ! {
                     //control.bot().left_power(),
                     //control.bot().right_power(),
                     plan.control().bot().linear_pos(),
-                    plan.control().bot().spin_pos(),
-                    plan.control().bot().linear_velocity(),
-                    plan.control().bot().spin_velocity(),
+                    //plan.control().bot().spin_pos(),
+                    //plan.control().bot().linear_velocity(),
+                    //plan.control().bot().spin_velocity(),
                     //control.bot().linear_pos(),
                     //control.currnt_move_name(),
-                    plan.control().bot().left_distance(),
+                    //plan.control().bot().left_distance(),
                     plan.control().bot().front_distance(),
-                    plan.control().bot().right_distance(),
+                    //plan.control().bot().right_distance(),
                 )
                 .ignore();
             }

@@ -1,4 +1,3 @@
-
 use ignore_result::Ignore;
 
 use embedded_hal::blocking::i2c;
