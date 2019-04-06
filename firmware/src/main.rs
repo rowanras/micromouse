@@ -103,6 +103,10 @@ fn main() -> ! {
     let mut blue_led = gpiob.pb14.into_push_pull_output();
     let mut orange_led = gpiob.pb15.into_push_pull_output();
 
+    let left_button = gpioc.pc10.into_pull_up_input();
+    let middle_button = gpioc.pc11.into_pull_up_input();
+    let right_button = gpioc.pc12.into_pull_up_input();
+
     orange_led.set_high();
     blue_led.set_low();
 
@@ -328,6 +332,14 @@ fn main() -> ! {
                 red_led.set_high();
             } else {
                 red_led.set_low();
+            }
+
+            if left_button.is_low() {
+                plan.go();
+            }
+
+            if right_button.is_low() {
+                plan.stop();
             }
 
             last_time = now;
