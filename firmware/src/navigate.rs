@@ -24,9 +24,10 @@ pub struct LessRandomNavigate {
 }
 
 impl LessRandomNavigate {
-    pub fn new(seed: [u8; 16]) -> RandomNavigate {
-        RandomNavigate {
+    pub fn new(seed: [u8; 16]) -> LessRandomNavigate {
+        LessRandomNavigate {
             rng: SmallRng::from_seed(seed),
+            cells: [[0; 16]; 16],
         }
     }
 
@@ -131,10 +132,8 @@ impl Command for LessRandomNavigate {
         let command = args.next();
 
         match command {
-            Some("cells") => {
-                
-            }
-            _ => writeln!(uart, "lrn: unknown command").ignore(),
+            Some("cells") => writeln!(uart, "{:?}", self.cells).ignore(),
+            c => writeln!(uart, "lrn: unknown command: {:?}", c).ignore(),
         }
     }
 }
@@ -203,7 +202,7 @@ impl Command for RandomNavigate {
         let command = args.next();
 
         match command {
-            _ => writeln!(uart, "lrn: unknown command").ignore(),
+            _ => writeln!(uart, "rn: unknown command").ignore(),
         }
     }
 }

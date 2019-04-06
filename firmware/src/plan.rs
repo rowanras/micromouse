@@ -189,6 +189,8 @@ where
 
         if command == Some(self.control.keyword_command()) {
             self.control.handle_command(uart, args);
+        } else if command == Some(self.navigate.keyword_command()) {
+            self.navigate.handle_command(uart, args);
         } else {
             match command {
                 Some("left") => self.add_moves(&[Some(Move::TurnLeft)]),

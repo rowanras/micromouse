@@ -259,15 +259,15 @@ fn main() -> ! {
 
     let control = Control::new(bot);
 
-    /*
     let navigate = RandomNavigate::new([
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
     ]);
-    */
 
+    /*
     let navigate = LessRandomNavigate::new([
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
     ]);
+    */
 
     let mut plan = Plan::new(control, navigate);
 
