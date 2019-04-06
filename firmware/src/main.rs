@@ -60,6 +60,7 @@ use crate::control::Control;
 use crate::plan::Plan;
 
 use crate::navigate::RandomNavigate;
+use crate::navigate::LessRandomNavigate;
 
 // Setup the master clock out
 pub fn mco2_setup(rcc: &stm32f405::RCC, gpioc: &stm32f405::GPIOC) {
@@ -226,8 +227,8 @@ fn main() -> ! {
         spin_i: 0.0,
         spin_d: 0.0,
         spin_err: 15.0,
-        spin_settle: 1000,
-        linear_p: 0.02,
+        spin_settle: 250,
+        linear_p: 0.0185,
         linear_i: 0.0,
         linear_d: 0.1,
         linear_spin_p: 0.015,
@@ -236,13 +237,13 @@ fn main() -> ! {
         linear_spin_pos_p: 2.0,
         linear_err: 10.0,
         linear_front_err: 5.0,
-        linear_settle: 1000,
+        linear_settle: 250,
         ticks_per_spin: 2064.03,
         ticks_per_cell: 1620.0,
         cell_width: 180.0,
         cell_offset: 53.0,
         wall_threshold: 120.0,
-        front_wall_distance: 35.0,
+        front_wall_distance: 35.0
     };
 
     let bot = Bot::new(
@@ -258,7 +259,13 @@ fn main() -> ! {
 
     let control = Control::new(bot);
 
+    /*
     let navigate = RandomNavigate::new([
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    ]);
+    */
+
+    let navigate = LessRandomNavigate::new([
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
     ]);
 
@@ -304,6 +311,9 @@ fn main() -> ! {
                     uart,
                     "{}\t{}\t{}",
                     now,
+                    //plan.x_pos(),
+                    //plan.y_pos(),
+                    //plan.direction(),
                     //control.bot().left_pos(),
                     //control.bot().right_pos(),
                     //control.bot().right_target(),
@@ -313,13 +323,13 @@ fn main() -> ! {
                     //control.bot().left_power(),
                     //control.bot().right_power(),
                     plan.control().bot().linear_pos(),
-                    //plan.control().bot().spin_pos(),
+                    plan.control().bot().spin_pos(),
                     //plan.control().bot().linear_velocity(),
                     //plan.control().bot().spin_velocity(),
                     //control.bot().linear_pos(),
                     //control.currnt_move_name(),
                     //plan.control().bot().left_distance(),
-                    plan.control().bot().front_distance(),
+                    //plan.control().bot().front_distance(),
                     //plan.control().bot().right_distance(),
                 )
                 .ignore();
