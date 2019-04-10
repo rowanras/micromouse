@@ -21,6 +21,9 @@ pub trait Navigate: Command {
 pub struct LessRandomNavigate {
     rng: SmallRng,
     cells: [[u8; 16]; 16],
+    left_cell: u8,
+    right_cell: u8,
+    front_cell: u8,
 }
 
 impl LessRandomNavigate {
@@ -28,6 +31,9 @@ impl LessRandomNavigate {
         LessRandomNavigate {
             rng: SmallRng::from_seed(seed),
             cells: [[0; 16]; 16],
+            left_cell: 0,
+            right_cell: 0,
+            front_cell: 0,
         }
     }
 
@@ -50,85 +56,60 @@ impl Navigate for LessRandomNavigate {
             self.cells[ux][uy] += 1;
         }
 
-        let left_cell = match d {
-            Direction::Up => self.get_cell(x-1, y),
-            Direction::Down => self.get_cell(x+1, y),
-            Direction::Right => self.get_cell(x, y+1),
-            Direction::Left => self.get_cell(x, y-1),
-        };
-
-        let front_cell = match d {
-            Direction::Up => self.get_cell(x, y+1),
-            Direction::Down => self.get_cell(x, y-1),
-            Direction::Right => self.get_cell(x+1, y),
-            Direction::Left => self.get_cell(x-1, y),
-        };
-
-        let right_cell = match d {
-            Direction::Up => self.get_cell(x+1, y),
-            Direction::Down => self.get_cell(x-1, y),
-            Direction::Right => self.get_cell(x, y-1),
-            Direction::Left => self.get_cell(x, y+1),
-        };
-
-        if
-            move_options.forward &&
-            front_cell <= left_cell &&
-            front_cell <= right_cell
-        {
-            [Some(Move::Forward), None]
-        } else if
-            move_options.left &&
-            left_cell <= front_cell &&
-            left_cell <= right_cell
-        {
-            [Some(Move::TurnLeft), Some(Move::Forward)]
-        } else if
-            move_options.right &&
-            right_cell <= front_cell &&
-            right_cell <= left_cell
-        {
-            [Some(Move::TurnRight), Some(Move::Forward)]
+        // win condition
+        if x >= 2 && x <= 2 && y >= 6 && y <= 6 {
+            [Some(Move::TurnLeft), Some(Move::TurnLeft)]
         } else {
-            [Some(Move::TurnAround), Some(Move::Forward)]
-        }
 
-        /*
-        match (move_options.left, move_options.forward, move_options.right) {
-            (true, true, true) => match self.rng.gen_range(0, 3) {
-                0 => [Some(Move::TurnLeft), Some(Move::Forward)],
-                1 => [Some(Move::TurnRight), Some(Move::Forward)],
-                _ => [Some(Move::Forward), None],
-            },
+            let left_cell = match d {
+                Direction::Up => self.get_cell(x-1, y),
+                Direction::Down => self.get_cell(x+1, y),
+                Direction::Right => self.get_cell(x, y+1),
+                Direction::Left => self.get_cell(x, y-1),
+            };
 
-            (true, false, true) => match self.rng.gen_range(0, 2) {
-                0 => [Some(Move::TurnLeft), Some(Move::Forward)],
-                _ => [Some(Move::TurnRight), Some(Move::Forward)],
-            },
+            self.left_cell = left_cell;
 
-            (false, true, true) => match self.rng.gen_range(0, 2) {
-                0 => [Some(Move::TurnRight), Some(Move::Forward)],
-                _ => [Some(Move::Forward), None],
-            },
+            let front_cell = match d {
+                Direction::Up => self.get_cell(x, y+1),
+                Direction::Down => self.get_cell(x, y-1),
+                Direction::Right => self.get_cell(x+1, y),
+                Direction::Left => self.get_cell(x-1, y),
+            };
 
-            (true, true, false) => match self.rng.gen_range(0, 2) {
-                0 => [Some(Move::TurnLeft), Some(Move::Forward)],
-                _ => [Some(Move::Forward), None],
-            },
+            self.left_cell = left_cell;
 
-            (false, true, false) => [Some(Move::Forward), None],
+            let right_cell = match d {
+                Direction::Up => self.get_cell(x+1, y),
+                Direction::Down => self.get_cell(x-1, y),
+                Direction::Right => self.get_cell(x, y-1),
+                Direction::Left => self.get_cell(x, y+1),
+            };
 
-            (true, false, false) => [Some(Move::TurnLeft), Some(Move::Forward)],
+            self.right_cell = right_cell;
 
-            (false, false, true) => {
+            if
+                move_options.forward &&
+                if move_options.left { front_cell <= left_cell } else { true } &&
+                if move_options.right { front_cell <= right_cell } else { true }
+            {
+                [Some(Move::Forward), None]
+            } else if
+                move_options.left &&
+                if move_options.forward { left_cell <= front_cell } else { true } &&
+                if move_options.right { left_cell <= right_cell } else { true }
+            {
+                [Some(Move::TurnLeft), Some(Move::Forward)]
+            } else if
+                move_options.right &&
+                if move_options.forward { right_cell <= front_cell } else { true } &&
+                if move_options.left { right_cell <= left_cell } else { true }
+            {
                 [Some(Move::TurnRight), Some(Move::Forward)]
-            }
-
-            (false, false, false) => {
+            } else {
                 [Some(Move::TurnAround), Some(Move::Forward)]
             }
         }
-        */
     }
 }
 
