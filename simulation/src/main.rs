@@ -5,10 +5,10 @@ mod navigate;
 
 use piston_window::*;
 
-use maze::Maze;
 use maze::Edge;
-use maze::Location;
 use maze::FullCellEdges;
+use maze::Location;
+use maze::Maze;
 
 use navigate::Move;
 use navigate::MoveOptions;
@@ -53,7 +53,6 @@ fn edge_to_opacity(edge: Edge) -> f32 {
 }
 
 fn main() {
-
     let maze = Maze::new((), Edge::Open);
 
     let mut current_x = 0;
@@ -82,7 +81,10 @@ fn main() {
                 for cell_y in 0..16 {
                     let y = cell_y as f64 * CELL_SIZE;
 
-                    let location = Location { x: cell_x, y: cell_y };
+                    let location = Location {
+                        x: cell_x,
+                        y: cell_y,
+                    };
 
                     let (
                         _,
@@ -90,30 +92,40 @@ fn main() {
                             north_edge,
                             east_edge,
                             south_edge,
-                            west_edge
-                        }
-                    ) = maze.cell(location)
-                        .expect(&format!("Invalid coordinate: {}, {}", cell_x, cell_y));
+                            west_edge,
+                        },
+                    ) = maze.cell(location).expect(&format!(
+                        "Invalid coordinate: {}, {}",
+                        cell_x, cell_y
+                    ));
 
-                    rectangle([1.0, 0.0, 0.0, edge_to_opacity(north_edge)],
-                              [x, y+CELL_SIZE, CELL_SIZE, WALL_SIZE],
-                              context.transform,
-                              graphics);
+                    rectangle(
+                        [1.0, 0.0, 0.0, edge_to_opacity(north_edge)],
+                        [x, y + CELL_SIZE, CELL_SIZE, WALL_SIZE],
+                        context.transform,
+                        graphics,
+                    );
 
-                    rectangle([0.0, 1.0, 0.0, edge_to_opacity(east_edge)],
-                              [x+CELL_SIZE, y, WALL_SIZE, CELL_SIZE],
-                              context.transform,
-                              graphics);
+                    rectangle(
+                        [0.0, 1.0, 0.0, edge_to_opacity(east_edge)],
+                        [x + CELL_SIZE, y, WALL_SIZE, CELL_SIZE],
+                        context.transform,
+                        graphics,
+                    );
 
-                    rectangle([0.0, 0.0, 1.0, edge_to_opacity(south_edge)],
-                              [x, y, CELL_SIZE, WALL_SIZE],
-                              context.transform,
-                              graphics);
+                    rectangle(
+                        [0.0, 0.0, 1.0, edge_to_opacity(south_edge)],
+                        [x, y, CELL_SIZE, WALL_SIZE],
+                        context.transform,
+                        graphics,
+                    );
 
-                    rectangle([1.0, 1.0, 0.0, edge_to_opacity(west_edge)],
-                              [x, y, WALL_SIZE, CELL_SIZE],
-                              context.transform,
-                              graphics);
+                    rectangle(
+                        [1.0, 1.0, 0.0, edge_to_opacity(west_edge)],
+                        [x, y, WALL_SIZE, CELL_SIZE],
+                        context.transform,
+                        graphics,
+                    );
                 }
             }
 

@@ -197,8 +197,7 @@ impl<C: Sized + Copy> Maze<C> {
             // ---
             // -##
             // -##
-            (x, y) if x > 0 && x < MAZE_WIDTH && y < MAZE_HEGIHT - 1 =>
-            {
+            (x, y) if x > 0 && x < MAZE_WIDTH && y < MAZE_HEGIHT - 1 => {
                 Some(self.south_west_cells[x - 1][y].1.east_edge)
             }
 
@@ -255,5 +254,125 @@ impl<C: Sized + Copy> Maze<C> {
                 west_edge,
             },
         ))
+    }
+
+    fn update_cell(
+        &mut self,
+        Location { x, y }: Location,
+        (
+            cell_data,
+            PartialCellEdges {
+                north_edge,
+                east_edge,
+                south_edge,
+                west_edge,
+            },
+        ): (Option<C>, PartialCellEdges),
+    ) {
+        match (x, y) {
+            // ---
+            // ##-
+            // ##-
+            (x, y) if x < MAZE_WIDTH - 1 && y < MAZE_HEGIHT - 1 => {
+                if let Some(cell_data) = cell_data {
+                    self.south_west_cells[x][y].0 = cell_data;
+                }
+                if let Some(north_edge) = north_edge {
+                    self.south_west_cells[x][y].1.north_edge = north_edge;
+                }
+                if let Some(east_edge) = east_edge {
+                    self.south_west_cells[x][y].1.north_edge = east_edge;
+                }
+            }
+
+            // ---
+            // --#
+            // --#
+            (x, y) if x == MAZE_WIDTH - 1 && y < MAZE_HEGIHT - 1 => {
+                if let Some(cell_data) = cell_data {
+                    self.east_cells[y].0 = cell_data;
+                }
+                if let Some(north_edge) = north_edge {
+                    self.east_cells[y].1.north_edge = north_edge;
+                }
+            }
+
+            // ##-
+            // ---
+            // ---
+            (x, y) if x < MAZE_WIDTH - 1 && y == MAZE_HEGIHT - 1 => {
+                if let Some(cell_data) = cell_data {
+                    self.north_cells[x].0 = cell_data;
+                }
+                if let Some(east_edge) = east_edge {
+                    self.north_cells[x].1.east_edge = east_edge;
+                }
+            }
+
+            // --#
+            // ---
+            // ---
+            (x, y) if x == MAZE_WIDTH - 1 && y == MAZE_HEGIHT - 1 => {
+                if let Some(cell_data) = cell_data {
+                    self.north_east_cell.0 = cell_data;
+                }
+            }
+
+            (_, _) => {
+                dbg!("Failed to set north or east edge!");
+            }
+        };
+
+        let west_edge = match (x, y) {
+            // ---
+            // -##
+            // -##
+            (x, y) if x > 0 && x < MAZE_WIDTH && y < MAZE_HEGIHT - 1 => {
+                Some(self.south_west_cells[x - 1][y].1.east_edge)
+            }
+
+            // -##
+            // ---
+            // ---
+            (x, y) if x > 0 && x < MAZE_WIDTH && y == MAZE_HEGIHT - 1 => {
+                Some(self.north_cells[x - 1].1.east_edge)
+            }
+
+            // #--
+            // #--
+            // #--
+            (x, _y) if x == 0 => Some(Edge::Closed),
+
+            (_, _) => {
+                dbg!("Failed to get west edge!");
+                None
+            }
+        };
+
+        let south_edge = match (x, y) {
+            // ##-
+            // ##-
+            // ---
+            (x, y) if x < MAZE_WIDTH - 1 && y > 0 && y < MAZE_HEGIHT => {
+                Some(self.south_west_cells[x][y - 1].1.north_edge)
+            }
+
+            // --#
+            // --#
+            // ---
+            (x, y) if x == MAZE_WIDTH - 1 && y > 0 && y < MAZE_HEGIHT => {
+                Some(self.east_cells[y - 1].1.north_edge)
+            }
+
+            // ---
+            // ---
+            // ###
+            (_x, y) if y == 0 => Some(Edge::Closed),
+
+            (_, _) => {
+                dbg!("Failed to get south edge!");
+                None
+            }
+        };
     }
 }
