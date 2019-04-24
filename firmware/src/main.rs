@@ -338,9 +338,15 @@ fn main() -> ! {
             green_led.toggle();
 
             if plan.control().is_idle() {
-                blue_led.set_low();
+                orange_led.set_low();
             } else {
+                orange_led.set_high();
+            }
+
+            if plan.is_win() {
                 blue_led.set_high();
+            } else {
+                blue_led.set_low();
             }
 
             if battery.is_dead() {

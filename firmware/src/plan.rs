@@ -169,6 +169,10 @@ where
     pub fn direction(&self) -> Direction {
         self.direction
     }
+
+    pub fn is_win(&self) -> bool {
+        self.x_pos == 1 && self.y_pos == 1
+    }
 }
 
 impl<N> Command for Plan<N>

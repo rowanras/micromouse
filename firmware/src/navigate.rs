@@ -14,13 +14,16 @@ use crate::plan::MoveOptions;
 use crate::uart::Uart;
 use crate::uart::Command;
 
+const MAZE_SIZE: usize = 3;
+const MAZE_LIMIT: i32 = MAZE_SIZE as i32 - 1;
+
 pub trait Navigate: Command {
     fn navigate(&mut self, x: i32, y: i32, dir: Direction, move_options: MoveOptions) -> [Option<Move>; 2];
 }
 
 pub struct LessRandomNavigate {
     rng: SmallRng,
-    cells: [[u8; 16]; 16],
+    cells: [[u8; MAZE_SIZE]; MAZE_SIZE],
     left_cell: u8,
     right_cell: u8,
     front_cell: u8,
@@ -30,7 +33,7 @@ impl LessRandomNavigate {
     pub fn new(seed: [u8; 16]) -> LessRandomNavigate {
         LessRandomNavigate {
             rng: SmallRng::from_seed(seed),
-            cells: [[0; 16]; 16],
+            cells: [[0; MAZE_SIZE]; MAZE_SIZE],
             left_cell: 0,
             right_cell: 0,
             front_cell: 0,
@@ -38,7 +41,7 @@ impl LessRandomNavigate {
     }
 
     fn get_cell(&self, x: i32, y: i32) -> u8 {
-        if x >= 0 && x <= 15 && y >= 0 && y <= 15 {
+        if x >= 0 && x <= MAZE_LIMIT && y >= 0 && y <= MAZE_LIMIT {
             self.cells[x as usize][y as usize]
         } else {
             255
@@ -49,16 +52,17 @@ impl LessRandomNavigate {
 impl Navigate for LessRandomNavigate {
     fn navigate(&mut self, x: i32, y: i32, d: Direction, move_options: MoveOptions) -> [Option<Move>; 2] {
 
-        let ux = if x < 0 { 0 } else if x > 15 { 15 } else { x } as usize;
-        let uy = if y < 0 { 0 } else if y > 15 { 15 } else { y } as usize;
+        let ux = if x < 0 { 0 } else if x > MAZE_LIMIT { MAZE_LIMIT } else { x } as usize;
+        let uy = if y < 0 { 0 } else if y > MAZE_LIMIT { MAZE_LIMIT } else { y } as usize;
 
         if self.cells[ux][uy] < 255 {
             self.cells[ux][uy] += 1;
         }
 
         // win condition
-        if x >= 2 && x <= 2 && y >= 6 && y <= 6 {
-            [Some(Move::TurnLeft), Some(Move::TurnLeft)]
+        if x >= 7 && x <= 8 && y >= 7 && y <= 8 {
+            //[Some(Move::TurnLeft), Some(Move::TurnLeft)]
+            [Some(Move::TurnAround), Some(Move::TurnLeft)]
         } else {
 
             let left_cell = match d {
@@ -77,7 +81,7 @@ impl Navigate for LessRandomNavigate {
                 Direction::Left => self.get_cell(x-1, y),
             };
 
-            self.left_cell = left_cell;
+            self.front_cell = front_cell;
 
             let right_cell = match d {
                 Direction::Up => self.get_cell(x+1, y),
