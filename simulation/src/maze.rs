@@ -328,24 +328,27 @@ impl<C: Sized + Copy> Maze<C> {
             // -##
             // -##
             (x, y) if x > 0 && x < MAZE_WIDTH && y < MAZE_HEGIHT - 1 => {
-                Some(self.south_west_cells[x - 1][y].1.east_edge)
+                if let Some(east_edge) = east_edge {
+                    self.south_west_cells[x - 1][y].1.east_edge = east_edge;
+                }
             }
 
             // -##
             // ---
             // ---
             (x, y) if x > 0 && x < MAZE_WIDTH && y == MAZE_HEGIHT - 1 => {
-                Some(self.north_cells[x - 1].1.east_edge)
+                if let Some(east_edge) = east_edge {
+                    self.north_cells[x - 1].1.east_edge = east_edge;
+                }
             }
 
             // #--
             // #--
             // #--
-            (x, _y) if x == 0 => Some(Edge::Closed),
+            (x, _y) if x == 0 => { },
 
             (_, _) => {
-                dbg!("Failed to get west edge!");
-                None
+                dbg!("Failed to set west edge!");
             }
         };
 
