@@ -1,22 +1,21 @@
-
 //! A simulated mouse
 
 use crate::CELL_SIZE;
 
-use crate::maze2::Maze;
 use crate::maze2::Edge;
+use crate::maze2::Maze;
 
-use crate::navigate::Navigate;
 use crate::navigate::Move;
 use crate::navigate::MoveOptions;
+use crate::navigate::Navigate;
 
 pub const WIDTH: f64 = 8.0;
 pub const LENGTH: f64 = 10.0;
 
-const LINEAR_SPEED: f64 = CELL_SIZE / 120.0;
-const TURN_SPEED: f64 = 90.0 / 120.0;
+const LINEAR_SPEED: f64 = 4.0 * CELL_SIZE;
+const TURN_SPEED: f64 = 8.0 * 90.0;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum Direction {
     North,
     South,
@@ -81,7 +80,7 @@ pub struct Mouse<N: Navigate> {
     paused: bool,
     moves: Vec<Move>,
     maze: Maze<()>,
-    nav: N
+    nav: N,
 }
 
 impl<N: Navigate> Mouse<N> {
@@ -154,11 +153,8 @@ impl<N: Navigate> Mouse<N> {
                     right: right_edge == Edge::Open,
                 };
 
-                println!("{:?}", move_options);
-
-                let moves = self.nav.navigate(move_options);
-
-                println!("{:?}", moves);
+                let moves =
+                    self.nav.navigate(self.cell_x, self.cell_y, self.direction, move_options);
 
                 for m in moves.into_iter() {
                     if let Some(m) = m {
@@ -172,14 +168,10 @@ impl<N: Navigate> Mouse<N> {
             MouseState::NextMove => {
                 self.state = if let Some(next_move) = self.moves.pop() {
                     match next_move {
-                        Move::Forward => {
-                            MouseState::MoveLinear(CELL_SIZE, 0.0)
-                        }
+                        Move::Forward => MouseState::MoveLinear(CELL_SIZE, 0.0),
                         Move::TurnLeft => MouseState::MoveTurn(-90.0, 0.0),
                         Move::TurnRight => MouseState::MoveTurn(90.0, 0.0),
-                        Move::TurnAround => {
-                            MouseState::MoveTurn(180.0, 0.0)
-                        }
+                        Move::TurnAround => MouseState::MoveTurn(180.0, 0.0),
                     }
                 } else {
                     MouseState::Decision
@@ -188,7 +180,7 @@ impl<N: Navigate> Mouse<N> {
 
             MouseState::MoveLinear(target, value) => {
                 let new_value = value
-                    + LINEAR_SPEED * if target > 0.0 { 1.0 } else { -1.0 };
+                    + LINEAR_SPEED * dt * if target > 0.0 { 1.0 } else { -1.0 };
 
                 if new_value.abs() > target.abs() {
                     let cells_moved =
@@ -214,8 +206,8 @@ impl<N: Navigate> Mouse<N> {
             }
 
             MouseState::MoveTurn(target, value) => {
-                let new_value = value
-                    + TURN_SPEED * if target > 0.0 { 1.0 } else { -1.0 };
+                let new_value =
+                    value + TURN_SPEED * dt * if target > 0.0 { 1.0 } else { -1.0 };
 
                 if new_value.abs() > target.abs() {
                     let turns = (target / 90.0).abs().round() as usize;
@@ -238,4 +230,3 @@ impl<N: Navigate> Mouse<N> {
         }
     }
 }
-

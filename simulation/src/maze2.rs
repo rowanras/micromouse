@@ -29,12 +29,8 @@ impl<C: Copy> Maze<C> {
      *  Reads files in the format described by
      *  http://www.micromouseonline.com/2018/01/31/micromouse-maze-file-collection/
      */
-    pub fn from_file(
-        cell: C,
-        bytes: [u8; WIDTH * HEIGHT],
-    ) -> Maze<C> {
-        let mut horizontal_edges =
-            [[Edge::Unknown; WIDTH - 1]; WIDTH];
+    pub fn from_file(cell: C, bytes: [u8; WIDTH * HEIGHT]) -> Maze<C> {
+        let mut horizontal_edges = [[Edge::Unknown; WIDTH - 1]; WIDTH];
         let mut vertical_edges = [[Edge::Unknown; WIDTH]; HEIGHT - 1];
 
         for (i, byte) in bytes.iter().enumerate() {

@@ -1,8 +1,8 @@
 extern crate piston_window;
 
 mod maze2;
-mod navigate;
 mod mouse;
+mod navigate;
 
 use std::fs::File;
 use std::io::Read;
@@ -13,10 +13,11 @@ use maze2::Edge;
 use maze2::Maze;
 
 use navigate::LeftWall;
-use navigate::RandomNavigate;
-use navigate::Navigate;
 use navigate::Move;
 use navigate::MoveOptions;
+use navigate::Navigate;
+use navigate::RandomNavigate;
+use navigate::CountingNavigate;
 
 use mouse::Direction;
 use mouse::Mouse;
@@ -84,7 +85,11 @@ fn main() {
     let maze = Maze::from_file((), bytes);
 
     //let mut navigation = LeftWall::new();
-    let nav = RandomNavigate::new([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+    //let nav = RandomNavigate::new([
+    //    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    //]);
+
+    let nav = CountingNavigate::new();
 
     let mut mouse = Mouse::new(nav, maze);
 
@@ -115,7 +120,8 @@ fn main() {
                 .transform
                 .trans(
                     CELL_SIZE / 2.0 + mouse_x,
-                    CELL_SIZE / 2.0 + (maze2::HEIGHT-1) as f64 * CELL_SIZE - mouse_y,
+                    CELL_SIZE / 2.0 + (maze2::HEIGHT - 1) as f64 * CELL_SIZE
+                        - mouse_y,
                 )
                 .rot_deg(mouse_dir);
 
