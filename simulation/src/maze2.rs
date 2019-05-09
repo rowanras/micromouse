@@ -1,7 +1,7 @@
 use std::fs::File;
 
-const MAZE_WIDTH: usize = 16;
-const MAZE_HEIGHT: usize = 16;
+pub const WIDTH: usize = 16;
+pub const HEIGHT: usize = 16;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Edge {
@@ -11,17 +11,17 @@ pub enum Edge {
 }
 
 pub struct Maze<C: Copy> {
-    horizontal_edges: [[Edge; MAZE_HEIGHT - 1]; MAZE_WIDTH],
-    vertical_edges: [[Edge; MAZE_WIDTH]; MAZE_WIDTH - 1],
-    cells: [[C; MAZE_HEIGHT]; MAZE_WIDTH],
+    horizontal_edges: [[Edge; HEIGHT - 1]; WIDTH],
+    vertical_edges: [[Edge; WIDTH]; WIDTH - 1],
+    cells: [[C; HEIGHT]; WIDTH],
 }
 
 impl<C: Copy> Maze<C> {
     pub fn new(cell: C, edge: Edge) -> Maze<C> {
         Maze {
-            horizontal_edges: [[edge; MAZE_HEIGHT - 1]; MAZE_WIDTH],
-            vertical_edges: [[edge; MAZE_HEIGHT]; MAZE_WIDTH - 1],
-            cells: [[cell; MAZE_HEIGHT]; MAZE_WIDTH],
+            horizontal_edges: [[edge; HEIGHT - 1]; WIDTH],
+            vertical_edges: [[edge; HEIGHT]; WIDTH - 1],
+            cells: [[cell; HEIGHT]; WIDTH],
         }
     }
 
@@ -31,15 +31,15 @@ impl<C: Copy> Maze<C> {
      */
     pub fn from_file(
         cell: C,
-        bytes: [u8; MAZE_WIDTH * MAZE_HEIGHT],
+        bytes: [u8; WIDTH * HEIGHT],
     ) -> Maze<C> {
         let mut horizontal_edges =
-            [[Edge::Unknown; MAZE_WIDTH - 1]; MAZE_WIDTH];
-        let mut vertical_edges = [[Edge::Unknown; MAZE_WIDTH]; MAZE_HEIGHT - 1];
+            [[Edge::Unknown; WIDTH - 1]; WIDTH];
+        let mut vertical_edges = [[Edge::Unknown; WIDTH]; HEIGHT - 1];
 
         for (i, byte) in bytes.iter().enumerate() {
-            let y = i % MAZE_WIDTH;
-            let x = i / MAZE_WIDTH;
+            let y = i % WIDTH;
+            let x = i / WIDTH;
 
             let north = if byte & 0x01 == 0x01 {
                 Edge::Closed
@@ -52,11 +52,11 @@ impl<C: Copy> Maze<C> {
                 Edge::Open
             };
 
-            if y < MAZE_HEIGHT - 1 {
+            if y < HEIGHT - 1 {
                 horizontal_edges[x][y] = north;
             }
 
-            if x < MAZE_WIDTH - 1 {
+            if x < WIDTH - 1 {
                 vertical_edges[x][y] = east;
             }
         }
@@ -64,12 +64,12 @@ impl<C: Copy> Maze<C> {
         Maze {
             horizontal_edges,
             vertical_edges,
-            cells: [[cell; MAZE_HEIGHT]; MAZE_WIDTH],
+            cells: [[cell; HEIGHT]; WIDTH],
         }
     }
 
     pub fn get(&self, x: usize, y: usize) -> (C, Edge, Edge, Edge, Edge) {
-        let north_edge = if y >= MAZE_HEIGHT - 1 {
+        let north_edge = if y >= HEIGHT - 1 {
             Edge::Closed
         } else {
             self.horizontal_edges[x][y]
@@ -81,7 +81,7 @@ impl<C: Copy> Maze<C> {
             self.horizontal_edges[x][y - 1]
         };
 
-        let east_edge = if x >= MAZE_WIDTH - 1 {
+        let east_edge = if x >= WIDTH - 1 {
             Edge::Closed
         } else {
             self.vertical_edges[x][y]
