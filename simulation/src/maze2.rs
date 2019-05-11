@@ -93,4 +93,8 @@ impl<C: Copy> Maze<C> {
 
         (cell, north_edge, south_edge, east_edge, west_edge)
     }
+
+    pub fn set_cell(&mut self, x: usize, y: usize, cell: C) {
+        self.cells[x][y] = cell;
+    }
 }

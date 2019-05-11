@@ -2,6 +2,8 @@
 
 use crate::CELL_SIZE;
 
+use crate::Visualize;
+
 use crate::maze2::Edge;
 use crate::maze2::Maze;
 
@@ -9,8 +11,8 @@ use crate::navigate::Move;
 use crate::navigate::MoveOptions;
 use crate::navigate::Navigate;
 
-pub const WIDTH: f64 = 8.0;
-pub const LENGTH: f64 = 10.0;
+pub const WIDTH: f64 = CELL_SIZE * 0.4;
+pub const LENGTH: f64 = CELL_SIZE * 0.5;
 
 const LINEAR_SPEED: f64 = 4.0 * CELL_SIZE;
 const TURN_SPEED: f64 = 8.0 * 90.0;
@@ -65,11 +67,10 @@ impl Direction {
 enum MouseState {
     MoveLinear(f64, f64),
     MoveTurn(f64, f64),
-    NextMove,
     Decision,
 }
 
-pub struct Mouse<N: Navigate> {
+pub struct Mouse<C: Visualize + Copy> {
     local_x: f64,
     local_y: f64,
     cell_x: usize,
@@ -79,12 +80,18 @@ pub struct Mouse<N: Navigate> {
     state: MouseState,
     paused: bool,
     moves: Vec<Move>,
-    maze: Maze<()>,
-    nav: N,
+    maze: Maze<C>,
+    nav: Box<dyn Navigate<Cell = C>>,
 }
 
-impl<N: Navigate> Mouse<N> {
-    pub fn new(nav: N, maze: Maze<()>) -> Mouse<N> {
+impl<C: Visualize + Copy> Mouse<C> {
+    pub fn new(nav: Box<dyn Navigate<Cell=C>>, mut maze: Maze<C>) -> Mouse<C> {
+        for x in 0..16 {
+            for y in 0..16 {
+                maze.set_cell(x, y, nav.get_cell(x as i32, y as i32));
+            }
+        }
+
         Mouse {
             local_x: 0.0,
             local_y: 0.0,
@@ -92,7 +99,7 @@ impl<N: Navigate> Mouse<N> {
             cell_y: 0,
             local_direction: 0.0,
             direction: Direction::North,
-            state: MouseState::NextMove,
+            state: MouseState::Decision,
             paused: true,
             moves: Vec::new(),
             maze,
@@ -116,56 +123,17 @@ impl<N: Navigate> Mouse<N> {
         )
     }
 
-    pub fn maze(&self) -> &Maze<()> {
+    pub fn maze_location(&self) -> (usize, usize, Direction) {
+        (self.cell_x, self.cell_y, self.direction)
+    }
+
+    pub fn maze(&self) -> &Maze<C> {
         &self.maze
     }
 
     pub fn run(&mut self, dt: f64) {
         match self.state {
             MouseState::Decision => {
-                let (_, north_edge, south_edge, east_edge, west_edge) =
-                    self.maze.get(self.cell_x, self.cell_y);
-
-                let left_edge = match self.direction {
-                    Direction::North => west_edge,
-                    Direction::South => east_edge,
-                    Direction::East => north_edge,
-                    Direction::West => south_edge,
-                };
-
-                let front_edge = match self.direction {
-                    Direction::North => north_edge,
-                    Direction::South => south_edge,
-                    Direction::East => east_edge,
-                    Direction::West => west_edge,
-                };
-
-                let right_edge = match self.direction {
-                    Direction::North => east_edge,
-                    Direction::South => west_edge,
-                    Direction::East => south_edge,
-                    Direction::West => north_edge,
-                };
-
-                let move_options = MoveOptions {
-                    forward: front_edge == Edge::Open,
-                    left: left_edge == Edge::Open,
-                    right: right_edge == Edge::Open,
-                };
-
-                let moves =
-                    self.nav.navigate(self.cell_x, self.cell_y, self.direction, move_options);
-
-                for m in moves.into_iter() {
-                    if let Some(m) = m {
-                        self.moves.insert(0, m.clone());
-                    }
-                }
-
-                self.state = MouseState::NextMove;
-            }
-
-            MouseState::NextMove => {
                 self.state = if let Some(next_move) = self.moves.pop() {
                     match next_move {
                         Move::Forward => MouseState::MoveLinear(CELL_SIZE, 0.0),
@@ -174,7 +142,70 @@ impl<N: Navigate> Mouse<N> {
                         Move::TurnAround => MouseState::MoveTurn(180.0, 0.0),
                     }
                 } else {
-                    MouseState::Decision
+                    let (_, north_edge, south_edge, east_edge, west_edge) =
+                        self.maze.get(self.cell_x, self.cell_y);
+
+                    let left_edge = match self.direction {
+                        Direction::North => west_edge,
+                        Direction::South => east_edge,
+                        Direction::East => north_edge,
+                        Direction::West => south_edge,
+                    };
+
+                    let front_edge = match self.direction {
+                        Direction::North => north_edge,
+                        Direction::South => south_edge,
+                        Direction::East => east_edge,
+                        Direction::West => west_edge,
+                    };
+
+                    let right_edge = match self.direction {
+                        Direction::North => east_edge,
+                        Direction::South => west_edge,
+                        Direction::East => south_edge,
+                        Direction::West => north_edge,
+                    };
+
+                    let move_options = MoveOptions {
+                        forward: front_edge == Edge::Open,
+                        left: left_edge == Edge::Open,
+                        right: right_edge == Edge::Open,
+                    };
+
+                    let moves = self.nav.navigate(
+                        self.cell_x,
+                        self.cell_y,
+                        self.direction,
+                        move_options,
+                    );
+
+                    let cell = self
+                        .nav
+                        .get_cell(self.cell_x as i32, self.cell_y as i32);
+
+                    self.maze.set_cell(self.cell_x, self.cell_y, cell);
+
+                    for m in moves.into_iter() {
+                        if let Some(m) = m {
+                            self.moves.insert(0, m.clone());
+                            //println!("{:?}", m);
+                        }
+                    }
+
+                    if let Some(next_move) = self.moves.pop() {
+                        match next_move {
+                            Move::Forward => {
+                                MouseState::MoveLinear(CELL_SIZE, 0.0)
+                            }
+                            Move::TurnLeft => MouseState::MoveTurn(-90.0, 0.0),
+                            Move::TurnRight => MouseState::MoveTurn(90.0, 0.0),
+                            Move::TurnAround => {
+                                MouseState::MoveTurn(180.0, 0.0)
+                            }
+                        }
+                    } else {
+                        MouseState::Decision
+                    }
                 }
             }
 
@@ -193,7 +224,7 @@ impl<N: Navigate> Mouse<N> {
                     }
                     self.local_x = 0.0;
                     self.local_y = 0.0;
-                    self.state = MouseState::NextMove;
+                    self.state = MouseState::Decision;
                 } else {
                     match self.direction {
                         Direction::North => self.local_y = new_value,
@@ -206,8 +237,8 @@ impl<N: Navigate> Mouse<N> {
             }
 
             MouseState::MoveTurn(target, value) => {
-                let new_value =
-                    value + TURN_SPEED * dt * if target > 0.0 { 1.0 } else { -1.0 };
+                let new_value = value
+                    + TURN_SPEED * dt * if target > 0.0 { 1.0 } else { -1.0 };
 
                 if new_value.abs() > target.abs() {
                     let turns = (target / 90.0).abs().round() as usize;
@@ -221,7 +252,7 @@ impl<N: Navigate> Mouse<N> {
                     }
 
                     self.local_direction = 0.0;
-                    self.state = MouseState::NextMove;
+                    self.state = MouseState::Decision;
                 } else {
                     self.local_direction = new_value;
                     self.state = MouseState::MoveTurn(target, new_value);
