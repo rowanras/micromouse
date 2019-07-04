@@ -53,7 +53,6 @@ impl Direction {
     }
 }
 
-
 pub struct Plan<N>
 where
     N: Navigate,
@@ -89,7 +88,6 @@ where
                 let ticks_per_spin = self.control.bot().config.ticks_per_spin;
                 let ticks_per_cell = self.control.bot().config.ticks_per_cell;
                 match next_move {
-
                     Move::TurnLeft => {
                         self.control.spin(-ticks_per_spin / 4.0);
                         self.direction = self.direction.turn_left();
@@ -102,7 +100,8 @@ where
 
                     Move::TurnAround => {
                         self.control.spin(ticks_per_spin / 2.0);
-                        self.direction = self.direction().turn_right().turn_right();
+                        self.direction =
+                            self.direction().turn_right().turn_right();
                     }
 
                     Move::Forward => {
@@ -127,7 +126,12 @@ where
                         right: self.control.bot().right_distance() > threshold,
                     };
 
-                    let next_moves = self.navigate.navigate(self.x_pos, self.y_pos, self.direction, move_options);
+                    let next_moves = self.navigate.navigate(
+                        self.x_pos,
+                        self.y_pos,
+                        self.direction,
+                        move_options,
+                    );
 
                     self.add_moves(&next_moves);
                 }

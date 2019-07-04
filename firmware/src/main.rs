@@ -59,8 +59,8 @@ use crate::control::Control;
 
 use crate::plan::Plan;
 
-use crate::navigate::RandomNavigate;
 use crate::navigate::LessRandomNavigate;
+use crate::navigate::RandomNavigate;
 
 // Setup the master clock out
 pub fn mco2_setup(rcc: &stm32f405::RCC, gpioc: &stm32f405::GPIOC) {
@@ -112,7 +112,6 @@ fn main() -> ! {
     blue_led.set_low();
 
     writeln!(uart, "Initializing").ignore();
-    uart.flush_tx(&mut time, 50);
 
     let mut front_distance = {
         let scl = gpiob.pb8.into_open_drain_output().into_alternate_af4();
@@ -187,13 +186,11 @@ fn main() -> ! {
     orange_led.set_low();
 
     writeln!(uart, "Reading id registers").ignore();
-    uart.flush_tx(&mut time, 50);
 
     for _ in 0..2 {
         let buf = front_distance.get_id_bytes();
 
         writeln!(uart, "{:x?}", buf).ignore();
-        uart.flush_tx(&mut time, 50);
 
         orange_led.toggle();
     }
@@ -202,7 +199,6 @@ fn main() -> ! {
         let buf = left_distance.get_id_bytes();
 
         writeln!(uart, "{:x?}", buf).ignore();
-        uart.flush_tx(&mut time, 50);
 
         orange_led.toggle();
     }
@@ -211,7 +207,6 @@ fn main() -> ! {
         let buf = right_distance.get_id_bytes();
 
         writeln!(uart, "{:x?}", buf).ignore();
-        uart.flush_tx(&mut time, 50);
 
         orange_led.toggle();
     }
@@ -243,7 +238,7 @@ fn main() -> ! {
         cell_width: 180.0,
         cell_offset: 53.0,
         wall_threshold: 120.0,
-        front_wall_distance: 35.0
+        front_wall_distance: 35.0,
     };
 
     let bot = Bot::new(
@@ -272,7 +267,6 @@ fn main() -> ! {
     let mut plan = Plan::new(control, navigate);
 
     writeln!(uart, "\n\nstart").ignore();
-    uart.flush_tx(&mut time, 1000);
 
     let mut last_time: u32 = 0;
 
@@ -281,7 +275,7 @@ fn main() -> ! {
     loop {
         let now: u32 = time.now();
 
-        if let Some(line) = uart.read_line() {
+        if let Ok(line) = uart.read_line() {
             if let Ok(string) = str::from_utf8(&line) {
                 let string = string.trim_matches(|c| c as u8 == 0).trim();
                 writeln!(uart, ">> {}", string).ignore();
@@ -309,15 +303,13 @@ fn main() -> ! {
             if report {
                 writeln!(
                     uart,
-                    "{}\t{}\t{:?}",
-                    //now,
-                    plan.x_pos(),
-                    plan.y_pos(),
-                    plan.direction(),
-                    //control.bot().left_pos(),
-                    //control.bot().right_pos(),
-                    //control.bot().right_target(),
-                    //control.bot().spin_pos(),
+                    "{}",
+                    now,
+                    //plan.x_pos(),
+                    //plan.y_pos(),
+                    //plan.direction(),
+                    //plan.control().bot().left_pos(),
+                    //plan.control().bot().right_pos(),
                     //control.bot().left_velocity(),
                     //control.bot().right_velocity(),
                     //control.bot().left_power(),
@@ -326,8 +318,6 @@ fn main() -> ! {
                     //plan.control().bot().spin_pos(),
                     //plan.control().bot().linear_velocity(),
                     //plan.control().bot().spin_velocity(),
-                    //control.bot().linear_pos(),
-                    //control.currnt_move_name(),
                     //plan.control().bot().left_distance(),
                     //plan.control().bot().front_distance(),
                     //plan.control().bot().right_distance(),
@@ -368,6 +358,5 @@ fn main() -> ! {
 
         plan.update(now);
         battery.update(now);
-        uart.flush_tx(&mut time, 50);
     }
 }

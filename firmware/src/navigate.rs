@@ -11,14 +11,20 @@ use crate::plan::Direction;
 use crate::plan::Move;
 use crate::plan::MoveOptions;
 
-use crate::uart::Uart;
 use crate::uart::Command;
+use crate::uart::Uart;
 
 const MAZE_SIZE: usize = 3;
 const MAZE_LIMIT: i32 = MAZE_SIZE as i32 - 1;
 
 pub trait Navigate: Command {
-    fn navigate(&mut self, x: i32, y: i32, dir: Direction, move_options: MoveOptions) -> [Option<Move>; 2];
+    fn navigate(
+        &mut self,
+        x: i32,
+        y: i32,
+        dir: Direction,
+        move_options: MoveOptions,
+    ) -> [Option<Move>; 2];
 }
 
 pub struct LessRandomNavigate {
@@ -50,10 +56,27 @@ impl LessRandomNavigate {
 }
 
 impl Navigate for LessRandomNavigate {
-    fn navigate(&mut self, x: i32, y: i32, d: Direction, move_options: MoveOptions) -> [Option<Move>; 2] {
-
-        let ux = if x < 0 { 0 } else if x > MAZE_LIMIT { MAZE_LIMIT } else { x } as usize;
-        let uy = if y < 0 { 0 } else if y > MAZE_LIMIT { MAZE_LIMIT } else { y } as usize;
+    fn navigate(
+        &mut self,
+        x: i32,
+        y: i32,
+        d: Direction,
+        move_options: MoveOptions,
+    ) -> [Option<Move>; 2] {
+        let ux = if x < 0 {
+            0
+        } else if x > MAZE_LIMIT {
+            MAZE_LIMIT
+        } else {
+            x
+        } as usize;
+        let uy = if y < 0 {
+            0
+        } else if y > MAZE_LIMIT {
+            MAZE_LIMIT
+        } else {
+            y
+        } as usize;
 
         if self.cells[ux][uy] < 255 {
             self.cells[ux][uy] += 1;
@@ -64,50 +87,70 @@ impl Navigate for LessRandomNavigate {
             //[Some(Move::TurnLeft), Some(Move::TurnLeft)]
             [Some(Move::TurnAround), Some(Move::TurnLeft)]
         } else {
-
             let left_cell = match d {
-                Direction::Up => self.get_cell(x-1, y),
-                Direction::Down => self.get_cell(x+1, y),
-                Direction::Right => self.get_cell(x, y+1),
-                Direction::Left => self.get_cell(x, y-1),
+                Direction::Up => self.get_cell(x - 1, y),
+                Direction::Down => self.get_cell(x + 1, y),
+                Direction::Right => self.get_cell(x, y + 1),
+                Direction::Left => self.get_cell(x, y - 1),
             };
 
             self.left_cell = left_cell;
 
             let front_cell = match d {
-                Direction::Up => self.get_cell(x, y+1),
-                Direction::Down => self.get_cell(x, y-1),
-                Direction::Right => self.get_cell(x+1, y),
-                Direction::Left => self.get_cell(x-1, y),
+                Direction::Up => self.get_cell(x, y + 1),
+                Direction::Down => self.get_cell(x, y - 1),
+                Direction::Right => self.get_cell(x + 1, y),
+                Direction::Left => self.get_cell(x - 1, y),
             };
 
             self.front_cell = front_cell;
 
             let right_cell = match d {
-                Direction::Up => self.get_cell(x+1, y),
-                Direction::Down => self.get_cell(x-1, y),
-                Direction::Right => self.get_cell(x, y-1),
-                Direction::Left => self.get_cell(x, y+1),
+                Direction::Up => self.get_cell(x + 1, y),
+                Direction::Down => self.get_cell(x - 1, y),
+                Direction::Right => self.get_cell(x, y - 1),
+                Direction::Left => self.get_cell(x, y + 1),
             };
 
             self.right_cell = right_cell;
 
-            if
-                move_options.forward &&
-                if move_options.left { front_cell <= left_cell } else { true } &&
-                if move_options.right { front_cell <= right_cell } else { true }
+            if move_options.forward
+                && if move_options.left {
+                    front_cell <= left_cell
+                } else {
+                    true
+                }
+                && if move_options.right {
+                    front_cell <= right_cell
+                } else {
+                    true
+                }
             {
                 [Some(Move::Forward), None]
-            } else if
-                move_options.left &&
-                if move_options.forward { left_cell <= front_cell } else { true } &&
-                if move_options.right { left_cell <= right_cell } else { true }
+            } else if move_options.left
+                && if move_options.forward {
+                    left_cell <= front_cell
+                } else {
+                    true
+                }
+                && if move_options.right {
+                    left_cell <= right_cell
+                } else {
+                    true
+                }
             {
                 [Some(Move::TurnLeft), Some(Move::Forward)]
-            } else if
-                move_options.right &&
-                if move_options.forward { right_cell <= front_cell } else { true } &&
-                if move_options.left { right_cell <= left_cell } else { true }
+            } else if move_options.right
+                && if move_options.forward {
+                    right_cell <= front_cell
+                } else {
+                    true
+                }
+                && if move_options.left {
+                    right_cell <= left_cell
+                } else {
+                    true
+                }
             {
                 [Some(Move::TurnRight), Some(Move::Forward)]
             } else {
@@ -149,7 +192,13 @@ impl RandomNavigate {
 }
 
 impl Navigate for RandomNavigate {
-    fn navigate(&mut self, _x: i32, _y: i32, _d: Direction, move_options: MoveOptions) -> [Option<Move>; 2] {
+    fn navigate(
+        &mut self,
+        _x: i32,
+        _y: i32,
+        _d: Direction,
+        move_options: MoveOptions,
+    ) -> [Option<Move>; 2] {
         match (move_options.left, move_options.forward, move_options.right) {
             (true, true, true) => match self.rng.gen_range(0, 3) {
                 0 => [Some(Move::TurnLeft), Some(Move::Forward)],
