@@ -35,6 +35,7 @@ static RX_BUF: Mutex<RefCell<Buffer<[u8; RX_BUFFER_LEN]>>> =
 static TX_BUF: Mutex<RefCell<Buffer<[u8; TX_BUFFER_LEN]>>> =
     Mutex::new(RefCell::new(Buffer { bytes: [0; TX_BUFFER_LEN], len: 0 }));
 
+#[derive(PartialEq)]
 pub enum TxError {
     BufferFull,
     Busy,
@@ -47,6 +48,7 @@ impl<T> From<arrayvec::CapacityError<T>> for TxError {
     }
 }
 
+#[derive(PartialEq)]
 pub enum RxError {
     BufferEmpty,
     Busy,
@@ -104,20 +106,21 @@ impl Uart {
         cortex_m::interrupt::free(|cs| {
             if let Ok(mut buf) = TX_BUF.borrow(cs).try_borrow_mut() {
                 if buf.len < buf.bytes.len() {
-                    for i in (1..buf.len).rev() {
-                        buf.bytes[i] = buf.bytes[i-1];
-                    }
-                    buf.bytes[0] = c;
-                    buf.len += 1;
-
-                    if buf.len == 1 {
+                    if buf.len == 0 {
                         if let Some(uart) = UART.borrow(cs).borrow().as_ref() {
-                            uart.dr.write(|w| w.dr().bits(buf.bytes[0] as u16));
+                            uart.dr.write(|w| w.dr().bits(c as u16));
+                            buf.len = 1;
                             Ok(())
                         } else {
                             Err(TxError::Busy)
                         }
                     } else {
+                        for i in (1..buf.len).rev() {
+                            buf.bytes[i] = buf.bytes[i-1];
+                        }
+                        buf.bytes[0] = c;
+                        buf.len += 1;
+
                         Ok(())
                     }
                 } else {
@@ -129,12 +132,64 @@ impl Uart {
         })
     }
 
+    pub fn add_bytes(&mut self, b: &[u8]) -> Result<(), TxError> {
+        for &c in b {
+            self.add_byte(c)?;
+        }
+
+        Ok(())
+    }
+
     pub fn add_str(&mut self, s: &str) -> Result<(), TxError> {
         for &c in s.as_bytes() {
             self.add_byte(c)?;
         }
 
         Ok(())
+    }
+
+    pub fn clear_tx(&mut self) -> Result<(), TxError> {
+        cortex_m::interrupt::free(|cs| {
+            if let Ok(mut buf) = TX_BUF.borrow(cs).try_borrow_mut() {
+                buf.len = 0;
+                buf.bytes = [0; TX_BUFFER_LEN];
+                Ok(())
+            } else {
+                Err(TxError::Busy)
+            }
+        })
+    }
+
+    pub fn clear_rx(&mut self) -> Result<(), TxError> {
+        cortex_m::interrupt::free(|cs| {
+            if let Ok(mut buf) = RX_BUF.borrow(cs).try_borrow_mut() {
+                buf.len = 0;
+                buf.bytes = [0; RX_BUFFER_LEN];
+                Ok(())
+            } else {
+                Err(TxError::Busy)
+            }
+        })
+    }
+
+    pub fn tx_len(&self) -> Result<usize, TxError> {
+        cortex_m::interrupt::free(|cs| {
+            if let Ok(buf) = TX_BUF.borrow(cs).try_borrow().as_ref() {
+                Ok(buf.len)
+            } else {
+                Err(TxError::Busy)
+            }
+        })
+    }
+
+    pub fn rx_len(&self) -> Result<usize, RxError> {
+        cortex_m::interrupt::free(|cs| {
+            if let Ok(buf) = RX_BUF.borrow(cs).try_borrow().as_ref() {
+                Ok(buf.len)
+            } else {
+                Err(RxError::Busy)
+            }
+        })
     }
 
     pub fn read_byte(&mut self) -> Result<u8, RxError> {
@@ -174,6 +229,22 @@ impl Uart {
             }
         })
     }
+
+    pub fn read_exact(&mut self, fill_buf: &mut [u8]) -> Result<(), RxError> {
+        cortex_m::interrupt::free(|cs| {
+            if let Ok(mut buf) = RX_BUF.borrow(cs).try_borrow_mut() {
+                if buf.len >= fill_buf.len() {
+                    fill_buf.clone_from_slice(&buf.bytes[0..fill_buf.len()]);
+                    buf.len -= fill_buf.len();
+                    Ok(())
+                } else {
+                    Err(RxError::BufferEmpty)
+                }
+            } else {
+                Err(RxError::Busy)
+            }
+        })
+    }
 }
 
 impl Write for Uart {
@@ -181,6 +252,7 @@ impl Write for Uart {
         self.add_str(s).map(|_| ()).map_err(|_| fmt::Error)
     }
 }
+
 
 #[isr]
 fn USART1() {
@@ -200,9 +272,16 @@ fn USART1() {
 
             if uart.sr.read().tc().bit() {
                 if let Ok(mut buf) = TX_BUF.borrow(cs).try_borrow_mut() {
+                    // decrement the byte we just send
                     if buf.len > 0 {
                         buf.len -= 1;
-                        uart.dr.write(|w| w.dr().bits(buf.bytes[buf.len] as u16));
+                    }
+
+                    // send the next byte
+                    if buf.len > 0 {
+                        let index = buf.len-1;
+                        uart.dr.write(|w| w.dr().bits(buf.bytes[index] as u16));
+                        buf.bytes[index] = 0;
                     }
                 }
 

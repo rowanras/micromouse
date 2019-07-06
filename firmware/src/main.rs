@@ -49,6 +49,8 @@ use crate::time::Time;
 use crate::uart::Command;
 use crate::uart::Uart;
 
+use crate::motors::Encoder;
+
 use crate::motors::left::{LeftEncoder, LeftMotor};
 use crate::motors::right::{RightEncoder, RightMotor};
 
@@ -85,7 +87,6 @@ fn main() -> ! {
     let mut uart = Uart::setup(&p.RCC, &mut cp.NVIC, p.USART1, &p.GPIOA);
 
     let left_motor = LeftMotor::setup(&p.RCC, p.TIM3, &p.GPIOA);
-
     let left_encoder = LeftEncoder::setup(&p.RCC, &p.GPIOA, &p.GPIOB, p.TIM2);
 
     let right_motor = RightMotor::setup(&p.RCC, p.TIM4, &p.GPIOB);
@@ -111,7 +112,7 @@ fn main() -> ! {
     orange_led.set_high();
     blue_led.set_low();
 
-    writeln!(uart, "Initializing").ignore();
+    //writeln!(uart, "Initializing").ignore();
 
     let mut front_distance = {
         let scl = gpiob.pb8.into_open_drain_output().into_alternate_af4();
@@ -185,12 +186,12 @@ fn main() -> ! {
     blue_led.set_low();
     orange_led.set_low();
 
-    writeln!(uart, "Reading id registers").ignore();
+    //writeln!(uart, "Reading id registers").ignore();
 
     for _ in 0..2 {
         let buf = front_distance.get_id_bytes();
 
-        writeln!(uart, "{:x?}", buf).ignore();
+        //writeln!(uart, "{:x?}", buf).ignore();
 
         orange_led.toggle();
     }
@@ -198,7 +199,7 @@ fn main() -> ! {
     for _ in 0..2 {
         let buf = left_distance.get_id_bytes();
 
-        writeln!(uart, "{:x?}", buf).ignore();
+        //writeln!(uart, "{:x?}", buf).ignore();
 
         orange_led.toggle();
     }
@@ -206,11 +207,12 @@ fn main() -> ! {
     for _ in 0..2 {
         let buf = right_distance.get_id_bytes();
 
-        writeln!(uart, "{:x?}", buf).ignore();
+        //writeln!(uart, "{:x?}", buf).ignore();
 
         orange_led.toggle();
     }
 
+    /*
     let config = BotConfig {
         left_p: 2000.0,
         left_i: 4.0,
@@ -265,8 +267,9 @@ fn main() -> ! {
     ]);
 
     let mut plan = Plan::new(control, navigate);
+    */
 
-    writeln!(uart, "\n\nstart").ignore();
+    //writeln!(uart, "\n\nstart").ignore();
 
     let mut last_time: u32 = 0;
 
@@ -275,88 +278,46 @@ fn main() -> ! {
     loop {
         let now: u32 = time.now();
 
-        if let Ok(line) = uart.read_line() {
-            if let Ok(string) = str::from_utf8(&line) {
-                let string = string.trim_matches(|c| c as u8 == 0).trim();
-                writeln!(uart, ">> {}", string).ignore();
-                if string.starts_with('!') {
-                    writeln!(uart, "Stopping report").ignore();
-                    report = false;
-                } else if string.starts_with('@') {
-                    writeln!(uart, "Starting report").ignore();
-                    report = true;
-                } else {
-                    let mut args = string.split_whitespace();
-
-                    let command = args.next();
-
-                    if command == Some(plan.keyword_command()) {
-                        plan.handle_command(&mut uart, args);
-                    } else {
-                        writeln!(uart, "Invalid Command!").ignore();
-                    }
-                }
-            }
-        }
-
-        if now - last_time >= 20u32 {
-            if report {
-                writeln!(
-                    uart,
-                    "{}",
-                    now,
-                    //plan.x_pos(),
-                    //plan.y_pos(),
-                    //plan.direction(),
-                    //plan.control().bot().left_pos(),
-                    //plan.control().bot().right_pos(),
-                    //control.bot().left_velocity(),
-                    //control.bot().right_velocity(),
-                    //control.bot().left_power(),
-                    //control.bot().right_power(),
-                    //plan.control().bot().linear_pos(),
-                    //plan.control().bot().spin_pos(),
-                    //plan.control().bot().linear_velocity(),
-                    //plan.control().bot().spin_velocity(),
-                    //plan.control().bot().left_distance(),
-                    //plan.control().bot().front_distance(),
-                    //plan.control().bot().right_distance(),
-                )
-                .ignore();
-            }
-
-            green_led.toggle();
-
-            if plan.control().is_idle() {
-                orange_led.set_low();
+        let mut rx_buf = [0; 8];
+        if uart.read_exact(&mut rx_buf) == Ok(()) {
+            if rx_buf[0] != 0 {
+                report = true;
             } else {
-                orange_led.set_high();
+                report = false;
             }
 
-            if plan.is_win() {
-                blue_led.set_high();
-            } else {
-                blue_led.set_low();
-            }
-
-            if battery.is_dead() {
+            if rx_buf[1] != 0{
                 red_led.set_high();
             } else {
                 red_led.set_low();
             }
 
-            if left_button.is_low() {
-                plan.go();
+            if rx_buf[2] != 0{
+                blue_led.set_high();
+            } else {
+                blue_led.set_low();
             }
-
-            if right_button.is_low() {
-                plan.stop();
-            }
-
-            last_time = now;
         }
 
-        plan.update(now);
+        if report && uart.tx_len() == Ok(0) {
+            let left_count = left_encoder.count();
+            let right_count = right_encoder.count();
+            let buffer = [
+                0xff,
+                (now & 0xff) as u8,
+                ((now >> 8) & 0xff) as u8,
+                ((now >> 16) & 0xff) as u8,
+                (left_count  & 0xff) as u8,
+                ((left_count >> 8) & 0xff) as u8,
+                (right_count  & 0xff) as u8,
+                ((right_count >> 8) & 0xff) as u8,
+            ];
+
+            uart.add_bytes(&buffer).ignore();
+
+            green_led.toggle();
+        }
+
         battery.update(now);
     }
 }
