@@ -5,7 +5,9 @@ authors = ["Tim <timothyhollabaugh@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-piston_window = "0.96.0"
+gtk = { version = "0.7.0", features = ["v3_24"] }
+gio = { version = "0.7.0", features = ["v2_58"] }
+cairo-rs = "0.7.0"
 plotters = { version = "0.2.2", default-features = false, features = ["piston", "bitmap"] }
 image = "0.21.0"
 rand = "0.7.0"

@@ -1,10 +1,11 @@
 #![recursion_limit = "128"]
-
-extern crate piston_window;
+#![allow(unused)]
 
 //mod maze2;
 //mod mouse;
 //mod navigate;
+
+mod plotters_cairo;
 
 use std::f64;
 
@@ -16,21 +17,25 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
 
-use piston_window::clear;
-use piston_window::image as draw_image;
-use piston_window::rectangle;
-use piston_window::PistonWindow;
-use piston_window::RenderEvent;
-use piston_window::Texture;
-use piston_window::TextureSettings;
-use piston_window::Transformed;
-use piston_window::WindowSettings;
+use gio::prelude::ApplicationExt;
+use gio::prelude::ApplicationExtManual;
+use gtk::Application;
+use gtk::ApplicationWindow;
+use gtk::Box as GtkBox;
+use gtk::BoxExt;
+use gtk::Button;
+use gtk::ButtonExt;
+use gtk::ContainerExt;
+use gtk::Continue;
+use gtk::DrawingAreaBuilder;
+use gtk::GtkWindowExt;
+use gtk::Inhibit;
+use gtk::WidgetExt;
+use gtk::Orientation;
 
 use image::ImageBuffer;
 
 use plotters::chart::ChartBuilder;
-use plotters::drawing::draw_piston_window;
-use plotters::drawing::BitMapBackend;
 use plotters::drawing::IntoDrawingArea;
 use plotters::series::LineSeries;
 use plotters::style;
@@ -45,6 +50,8 @@ use serialport::SerialPortSettings;
 use serialport::StopBits;
 
 use micromouse_lib::CONFIG2019;
+
+use plotters_cairo::CairoBackend;
 
 //use maze2::Edge;
 //use maze2::Maze;
@@ -240,107 +247,154 @@ fn main() {
         }
     });
 
-    let states_maze = Arc::clone(&states);
+    let states_gui = Arc::clone(&states);
 
-    let mut window: PistonWindow = WindowSettings::new("Mouse", [800, 300])
-        .exit_on_esc(true)
-        .build()
-        .unwrap();
+    let application =
+        Application::new(Some("edu.rowan.ras.micromouse"), Default::default())
+            .unwrap();
 
-    let mut texture_context = window.create_texture_context();
+    application.connect_activate(move |app| {
+        let window = ApplicationWindow::new(app);
+        window.set_title("Micromouse");
+        window.set_default_size(800, 300);
 
-    while let Some(event) = window.next() {
-        if let Some(_) = event.render_args() {
-            window.draw_2d(&event, |context, graphics, _device| {
-                clear([1.0; 4], graphics);
+        let box_widget = GtkBox::new(Orientation::Horizontal, 0);
 
-                let states = states_maze.lock().unwrap();
+        let maze_widget = DrawingAreaBuilder::new().build();
 
-                if let Some(state) = dbg!(states.last()) {
-                    let transform = context
-                        .transform
-                        .trans(state.x / MM_PER_PIXEL, state.y / MM_PER_PIXEL)
-                        .rot_rad(state.dir);
+        let states_maze = Arc::clone(&states_gui);
 
-                    rectangle(
-                        [0.0, 1.0, 0.0, 1.0],
-                        [
-                            -(config.mouse.length - config.mouse.front_offset)
-                                / MM_PER_PIXEL,
-                            -config.mouse.width / MM_PER_PIXEL / 2.0,
-                            config.mouse.length / MM_PER_PIXEL,
-                            config.mouse.width / MM_PER_PIXEL,
-                        ],
-                        transform,
-                        graphics,
-                    );
-                }
+        maze_widget.connect_draw(move |_widget, cr| {
+            cr.set_source_rgb(109.0 / 255.0, 192.0 / 255.0, 113.0 / 255.0);
 
-                let mut graph_image_buf = Vec::new();
+            let states = states_maze.lock().unwrap();
 
-                {
-                    let root = BitMapBackend::with_buffer(
-                        &mut graph_image_buf,
-                        (400, 300),
-                    )
-                    .into_drawing_area();
+            if let Some(state) = states.last() {
+                cr.translate(state.x / MM_PER_PIXEL, state.y / MM_PER_PIXEL);
+                cr.rotate(state.dir);
 
-                    root.fill(&style::White).unwrap();
+                cr.rectangle(
+                    -(config.mouse.length - config.mouse.front_offset)
+                        / MM_PER_PIXEL,
+                    -config.mouse.width / MM_PER_PIXEL / 2.0,
+                    config.mouse.length / MM_PER_PIXEL,
+                    config.mouse.width / MM_PER_PIXEL,
+                );
 
-                    let time = if let Some(state) = states.last() {
-                        state.time
-                    } else {
-                        0.0
-                    };
+                cr.fill();
+            }
+            Inhibit(false)
+        });
 
-                    let mut cc = ChartBuilder::on(&root)
-                        .margin(10)
-                        .caption("Left Encoder", ("Arial", 20).into_font())
-                        .x_label_area_size(40)
-                        .y_label_area_size(50)
-                        .build_ranged(time - 60.0..time, 0.0..50.0)
-                        .unwrap();
+        box_widget.pack_start(&maze_widget, true, true, 0);
 
-                    cc.configure_mesh()
-                        .x_label_formatter(&|x| format!("{}", x))
-                        .y_label_formatter(&|y| format!("{}", y))
-                        .x_labels(15)
-                        .y_labels(10)
-                        .x_desc("seconds")
-                        .y_desc("mm")
-                        .axis_desc_style(("Arial", 15).into_font())
-                        .disable_x_mesh()
-                        .disable_y_mesh()
-                        .draw()
-                        .unwrap();
+        let plot_widget = DrawingAreaBuilder::new().build();
 
-                    cc.draw_series(LineSeries::new(
-                        states.iter().map(|s| (s.time, s.left)),
-                        &style::Palette99::pick(0),
-                    ))
-                    .unwrap();
-                }
+        let states_plot = Arc::clone(&states_gui);
 
-                // Add the alpha channel
-                let graph_image_buf: Vec<u8> = graph_image_buf
-                    .chunks_exact(3)
-                    .flat_map(|rgb| {
-                        vec![rgb[0], rgb[1], rgb[2], 255].into_iter()
-                    })
-                    .collect();
+        plot_widget.connect_draw(move |widget, cr| {
+            let states = states_plot.lock().unwrap();
 
-                let graph_texture = Texture::from_image(
-                    &mut texture_context,
-                    &ImageBuffer::from_vec(400, 300, graph_image_buf.clone())
-                        .expect("Buffer not big enough!"),
-                    &TextureSettings::new(),
-                )
+            let root = CairoBackend::new(
+                &cr,
+                widget.get_allocated_width() as u32,
+                widget.get_allocated_height() as u32,
+            )
+            .into_drawing_area();
+
+            root.fill(&style::White).unwrap();
+
+            let time = if let Some(state) = states.last() {
+                state.time
+            } else {
+                0.0
+            };
+
+            let mut cc = ChartBuilder::on(&root)
+                .margin(10)
+                //.caption("Left Encoder", ("Arial", 15).into_font())
+                .x_label_area_size(40)
+                .y_label_area_size(50)
+                .build_ranged(time - 60.0..time, 0.0..50.0)
                 .unwrap();
 
-                let transform = context.transform.trans(400.0, 0.0);
+            cc.configure_mesh()
+                .x_label_formatter(&|x| format!("{}", x))
+                .y_label_formatter(&|y| format!("{}", y))
+                .x_labels(15)
+                .y_labels(10)
+                //.x_desc("seconds")
+                //.y_desc("mm")
+                .axis_desc_style(("Arial", 15).into_font())
+                .disable_x_mesh()
+                .disable_y_mesh()
+                .draw()
+                .unwrap();
 
-                draw_image(&graph_texture, transform, graphics);
-            });
+            cc.draw_series(LineSeries::new(
+                states.iter().map(|s| (s.time, s.left)),
+                &style::Palette99::pick(20),
+            ))
+            .unwrap();
+
+            Inhibit(false)
+        });
+
+        box_widget.pack_start(&plot_widget, true, true, 0);
+
+        window.add(&box_widget);
+
+        gtk::timeout_add(20, move || {
+            maze_widget.queue_draw();
+            plot_widget.queue_draw();
+            Continue(true)
+        });
+
+        window.show_all();
+    });
+
+    application.run(&[]);
+
+    /*
+        let mut window: PistonWindow = WindowSettings::new("Mouse", [800, 300])
+            .exit_on_esc(true)
+            .build()
+            .unwrap();
+
+        let mut texture_context = window.create_texture_context();
+
+        while let Some(event) = window.next() {
+            if let Some(_) = event.render_args() {
+                window.draw_2d(&event, |context, graphics, _device| {
+                    clear([1.0; 4], graphics);
+
+
+                    let mut graph_image_buf = Vec::new();
+
+                    {
+                    }
+
+                    // Add the alpha channel
+                    let graph_image_buf: Vec<u8> = graph_image_buf
+                        .chunks_exact(3)
+                        .flat_map(|rgb| {
+                            vec![rgb[0], rgb[1], rgb[2], 255].into_iter()
+                        })
+                        .collect();
+
+                    let graph_texture = Texture::from_image(
+                        &mut texture_context,
+                        &ImageBuffer::from_vec(400, 300, graph_image_buf.clone())
+                            .expect("Buffer not big enough!"),
+                        &TextureSettings::new(),
+                    )
+                    .unwrap();
+
+                    let transform = context.transform.trans(400.0, 0.0);
+
+                    draw_image(&graph_texture, transform, graphics);
+                });
+            }
         }
-    }
+    */
 }
