@@ -225,7 +225,8 @@ impl<'a> DrawingBackend for CairoBackend<'a> {
             FontTransform::Rotate270 => f64::consts::PI / 2.0,
         });
 
-        self.cr.translate(-pos.0 as f64, -(pos.1 as f64 + font.get_size()));
+        self.cr
+            .translate(-pos.0 as f64, -(pos.1 as f64 + font.get_size()));
 
         //self.cr.identity_matrix();
 

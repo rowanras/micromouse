@@ -5,33 +5,18 @@
 //mod mouse;
 //mod navigate;
 
-mod plotters_cairo;
+//mod plotters_cairo;
+mod uart;
+mod gui;
 
 use std::f64;
 
 use std::io::Read;
 
-use std::time::Duration;
-
+use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
-
-use gio::prelude::ApplicationExt;
-use gio::prelude::ApplicationExtManual;
-use gtk::Application;
-use gtk::ApplicationWindow;
-use gtk::Box as GtkBox;
-use gtk::BoxExt;
-use gtk::Button;
-use gtk::ButtonExt;
-use gtk::ContainerExt;
-use gtk::Continue;
-use gtk::DrawingAreaBuilder;
-use gtk::GtkWindowExt;
-use gtk::Inhibit;
-use gtk::WidgetExt;
-use gtk::Orientation;
 
 use image::ImageBuffer;
 
@@ -43,15 +28,7 @@ use plotters::style::Color;
 use plotters::style::IntoFont;
 use plotters::style::Palette;
 
-use serialport::DataBits;
-use serialport::FlowControl;
-use serialport::Parity;
-use serialport::SerialPortSettings;
-use serialport::StopBits;
-
 use micromouse_lib::CONFIG2019;
-
-use plotters_cairo::CairoBackend;
 
 //use maze2::Edge;
 //use maze2::Maze;
@@ -158,7 +135,7 @@ fn draw_maze<C: Visualize + Copy>(
 */
 
 #[derive(Debug)]
-struct MouseState {
+pub struct MouseState {
     time: f64,
     left: f64,
     right: f64,
@@ -167,234 +144,69 @@ struct MouseState {
     dir: f64,
 }
 
+#[derive(Debug)]
+enum Msg {
+    Uart(u32, i32, i32),
+}
+
 fn main() {
     let config = CONFIG2019;
 
     let states: Arc<Mutex<Vec<MouseState>>> = Arc::new(Mutex::new(Vec::new()));
 
-    let state_uart = Arc::clone(&states);
+    let (tx, rx) = mpsc::channel();
+
+    uart::start(tx.clone(), Msg::Uart);
+
+    let state_update = Arc::clone(&states);
+
     thread::spawn(move || {
-        let serial_settings = SerialPortSettings {
-            baud_rate: 9600,
-            data_bits: DataBits::Eight,
-            flow_control: FlowControl::None,
-            parity: Parity::None,
-            stop_bits: StopBits::One,
-            timeout: Duration::from_secs(1),
-        };
+        while let Ok(msg) = rx.recv() {
 
-        let mut port =
-            serialport::open_with_settings("/dev/ttyUSB0", &serial_settings)
-                .expect("Could not open port");
+            let mut state = state_update.lock().unwrap();
 
-        port.write_all(&[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-            .expect("Could not write bytes");
+            match msg {
+                Msg::Uart(time, left, right) => {
 
-        let mut leftover_bytes = Vec::new();
-        port.read_to_end(&mut leftover_bytes);
+                    let time = time as f64 / 1000.0;
+                    let left = config.mouse.ticks_to_mm(left as f64);
+                    let right = config.mouse.ticks_to_mm(right as f64);
 
-        port.write_all(&[0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00])
-            .expect("Could not write bytes");
+                    let (x, y, dir) = if let Some(last_state) = state.last() {
+                        let delta_left = left - last_state.left;
+                        let delta_right = right - last_state.right;
 
-        let mut buffer = [0; 8];
+                        let delta_linear = (delta_left + delta_right) / 2.0;
+                        let delta_angular =
+                            config.mouse.mm_to_rads((delta_left - delta_right) / 2.0);
 
-        loop {
-            port.read_exact(&mut buffer)
-                .expect("Could not read from port");
+                        let mid_dir = last_state.dir + delta_angular / 2.0;
 
-            let time = (((buffer[3] as u32) << 16)
-                | ((buffer[2] as u32) << 8)
-                | (buffer[1] as u32)) as f64
-                / 1000.0;
-            let left = config.mouse.ticks_to_mm(
-                (((buffer[5] as i32) << 8) | (buffer[4] as i32)) as f64,
-            );
-            let right = config.mouse.ticks_to_mm(
-                (((buffer[7] as i32) << 8) | (buffer[6] as i32)) as f64,
-            );
+                        (
+                            last_state.x + delta_linear * f64::cos(mid_dir),
+                            last_state.y + delta_linear * f64::sin(mid_dir),
+                            last_state.dir + delta_angular,
+                        )
+                    } else {
+                        (90.0, 90.0, f64::consts::PI / 2.0)
+                    };
 
-            let mut s = state_uart.lock().unwrap();
+                    let new_state = MouseState {
+                        time,
+                        left,
+                        right,
+                        x,
+                        y,
+                        dir,
+                    };
 
-            let (x, y, dir) = if let Some(last_state) = s.last() {
-                let delta_left = left - last_state.left;
-                let delta_right = right - last_state.right;
-
-                let delta_linear = (delta_left + delta_right) / 2.0;
-                let delta_angular =
-                    config.mouse.mm_to_rads((delta_left - delta_right) / 2.0);
-
-                let mid_dir = last_state.dir + delta_angular / 2.0;
-
-                (
-                    last_state.x + delta_linear * f64::cos(mid_dir),
-                    last_state.y + delta_linear * f64::sin(mid_dir),
-                    last_state.dir + delta_angular,
-                )
-            } else {
-                (90.0, 90.0, f64::consts::PI / 2.0)
-            };
-
-            let new_state = MouseState {
-                time,
-                left,
-                right,
-                x,
-                y,
-                dir,
-            };
-
-            s.push(new_state);
+                    state.push(new_state);
+                }
+            }
         }
     });
 
-    let states_gui = Arc::clone(&states);
+    gui::start(Arc::clone(&states));
 
-    let application =
-        Application::new(Some("edu.rowan.ras.micromouse"), Default::default())
-            .unwrap();
-
-    application.connect_activate(move |app| {
-        let window = ApplicationWindow::new(app);
-        window.set_title("Micromouse");
-        window.set_default_size(800, 300);
-
-        let box_widget = GtkBox::new(Orientation::Horizontal, 0);
-
-        let maze_widget = DrawingAreaBuilder::new().build();
-
-        let states_maze = Arc::clone(&states_gui);
-
-        maze_widget.connect_draw(move |_widget, cr| {
-            cr.set_source_rgb(109.0 / 255.0, 192.0 / 255.0, 113.0 / 255.0);
-
-            let states = states_maze.lock().unwrap();
-
-            if let Some(state) = states.last() {
-                cr.translate(state.x / MM_PER_PIXEL, state.y / MM_PER_PIXEL);
-                cr.rotate(state.dir);
-
-                cr.rectangle(
-                    -(config.mouse.length - config.mouse.front_offset)
-                        / MM_PER_PIXEL,
-                    -config.mouse.width / MM_PER_PIXEL / 2.0,
-                    config.mouse.length / MM_PER_PIXEL,
-                    config.mouse.width / MM_PER_PIXEL,
-                );
-
-                cr.fill();
-            }
-            Inhibit(false)
-        });
-
-        box_widget.pack_start(&maze_widget, true, true, 0);
-
-        let plot_widget = DrawingAreaBuilder::new().build();
-
-        let states_plot = Arc::clone(&states_gui);
-
-        plot_widget.connect_draw(move |widget, cr| {
-            let states = states_plot.lock().unwrap();
-
-            let root = CairoBackend::new(
-                &cr,
-                widget.get_allocated_width() as u32,
-                widget.get_allocated_height() as u32,
-            )
-            .into_drawing_area();
-
-            root.fill(&style::White).unwrap();
-
-            let time = if let Some(state) = states.last() {
-                state.time
-            } else {
-                0.0
-            };
-
-            let mut cc = ChartBuilder::on(&root)
-                .margin(10)
-                //.caption("Left Encoder", ("Arial", 15).into_font())
-                .x_label_area_size(40)
-                .y_label_area_size(50)
-                .build_ranged(time - 60.0..time, 0.0..50.0)
-                .unwrap();
-
-            cc.configure_mesh()
-                .x_label_formatter(&|x| format!("{}", x))
-                .y_label_formatter(&|y| format!("{}", y))
-                .x_labels(15)
-                .y_labels(10)
-                //.x_desc("seconds")
-                //.y_desc("mm")
-                .axis_desc_style(("Arial", 15).into_font())
-                .disable_x_mesh()
-                .disable_y_mesh()
-                .draw()
-                .unwrap();
-
-            cc.draw_series(LineSeries::new(
-                states.iter().map(|s| (s.time, s.left)),
-                &style::Palette99::pick(20),
-            ))
-            .unwrap();
-
-            Inhibit(false)
-        });
-
-        box_widget.pack_start(&plot_widget, true, true, 0);
-
-        window.add(&box_widget);
-
-        gtk::timeout_add(20, move || {
-            maze_widget.queue_draw();
-            plot_widget.queue_draw();
-            Continue(true)
-        });
-
-        window.show_all();
-    });
-
-    application.run(&[]);
-
-    /*
-        let mut window: PistonWindow = WindowSettings::new("Mouse", [800, 300])
-            .exit_on_esc(true)
-            .build()
-            .unwrap();
-
-        let mut texture_context = window.create_texture_context();
-
-        while let Some(event) = window.next() {
-            if let Some(_) = event.render_args() {
-                window.draw_2d(&event, |context, graphics, _device| {
-                    clear([1.0; 4], graphics);
-
-
-                    let mut graph_image_buf = Vec::new();
-
-                    {
-                    }
-
-                    // Add the alpha channel
-                    let graph_image_buf: Vec<u8> = graph_image_buf
-                        .chunks_exact(3)
-                        .flat_map(|rgb| {
-                            vec![rgb[0], rgb[1], rgb[2], 255].into_iter()
-                        })
-                        .collect();
-
-                    let graph_texture = Texture::from_image(
-                        &mut texture_context,
-                        &ImageBuffer::from_vec(400, 300, graph_image_buf.clone())
-                            .expect("Buffer not big enough!"),
-                        &TextureSettings::new(),
-                    )
-                    .unwrap();
-
-                    let transform = context.transform.trans(400.0, 0.0);
-
-                    draw_image(&graph_texture, transform, graphics);
-                });
-            }
-        }
-    */
+    loop{}
 }
