@@ -191,6 +191,10 @@ fn view_readonly_float(
 
 fn view_state(ui: &mut Ui, gui_state: &mut GuiState, mouse_state: &MouseState) {
 
+    ui.columns(1, im_str!("headers"), false);
+    ui.text("Raw from the Mouse");
+    ui.next_column();
+
     view_readonly_float(ui, gui_state, mouse_state, im_str!("Time"), |m| {
         m.time as f32
     });
@@ -208,6 +212,11 @@ fn view_state(ui: &mut Ui, gui_state: &mut GuiState, mouse_state: &MouseState) {
         im_str!("Right Encoder"),
         |m| m.right as f32,
     );
+
+    ui.columns(1, im_str!("headers"), false);
+    ui.text("Calculated from raw");
+    ui.next_column();
+
     view_readonly_float(
         ui,
         gui_state,
