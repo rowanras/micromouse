@@ -1,22 +1,22 @@
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
 use std::time::Instant;
-use std::borrow::Cow;
-use std::rc::Rc;
-use std::collections::HashMap;
 
+use glium::backend::Facade;
 use glium::glutin;
 use glium::glutin::Event;
 use glium::glutin::WindowEvent;
-use glium::Display;
-use glium::Surface;
 use glium::texture::ClientFormat;
 use glium::texture::RawImage2d;
-use glium::backend::Facade;
-use glium::Texture2d;
+use glium::Display;
 use glium::Rect;
+use glium::Surface;
+use glium::Texture2d;
 
 use imgui::im_str;
 use imgui::Condition;
@@ -27,9 +27,9 @@ use imgui::FontSource;
 use imgui::ImGuiSelectableFlags;
 use imgui::ImStr;
 use imgui::ImString;
-use imgui::Ui;
 use imgui::TextureId;
 use imgui::Textures;
+use imgui::Ui;
 
 use imgui_glium_renderer::GliumRenderer;
 use imgui_winit_support::HiDpiMode;
@@ -38,20 +38,22 @@ use imgui_winit_support::WinitPlatform;
 use crate::MouseState;
 
 struct Plot {
-    pub function: fn(&MouseState) -> f64,
+    pub function: fn(&MouseState) -> f32,
     pub showing: bool,
 }
 
 impl std::fmt::Debug for Plot {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Plot {{ showing: {:?} }}", self.showing)
+        write!( f, "Plot {{ showing: {:?} }}", self.showing)
     }
 }
 
 #[derive(Debug)]
 struct GuiState {
-    plots: HashMap<String, Plot>,
-    hello: ImString,
+    pub plots: HashMap<String, Plot>,
+    pub plot_range: f32,
+    pub history_time: f32,
+    pub history_active: bool,
 }
 
 pub fn start(
@@ -101,7 +103,6 @@ pub fn start(
         let mut renderer = GliumRenderer::init(&mut imgui, &display)
             .expect("Failed to initialize renderer");
 
-
         let gl_window = display.gl_window();
         let window = gl_window.window();
         let mut last_frame = Instant::now();
@@ -109,7 +110,9 @@ pub fn start(
 
         let mut guistate = GuiState {
             plots: HashMap::new(),
-            hello: ImString::new("hello"),
+            plot_range: 10.0,
+            history_time: 0.0,
+            history_active: false,
         };
 
         while run {
@@ -131,7 +134,13 @@ pub fn start(
             let mut ui = imgui.frame();
 
             let mouse_state = mouse_state.lock().unwrap();
-            run_ui(&mut run, &mut ui, renderer.textures(), &mut guistate, &*mouse_state);
+            run_ui(
+                &mut run,
+                &mut ui,
+                renderer.textures(),
+                &mut guistate,
+                &*mouse_state,
+            );
 
             let mut target = display.draw();
             target.clear_color_srgb(1.0, 1.0, 1.0, 1.0);
@@ -150,7 +159,7 @@ fn view_readonly_float(
     gui_state: &mut GuiState,
     mouse_state: &MouseState,
     label: &ImStr,
-    value: fn(&MouseState) -> f64,
+    value: fn(&MouseState) -> f32,
 ) {
     ui.push_id(label);
     let popup_id = ImString::new(format!("Popup_{}", label));
@@ -168,57 +177,57 @@ fn view_readonly_float(
         ui.next_column();
     } else {
         ui.next_column();
-        gui_state.plots.insert(key.to_string(), Plot {
-            function: value,
-            showing: false,
-        });
+        gui_state.plots.insert(
+            key.to_string(),
+            Plot {
+                function: value,
+                showing: false,
+            },
+        );
     }
 
     ui.pop_id();
 }
 
 fn view_state(ui: &mut Ui, gui_state: &mut GuiState, mouse_state: &MouseState) {
-    view_readonly_float(
-        ui,
-        gui_state,
-        mouse_state,
-        im_str!("Time"),
-        |m| m.time,
-    );
+
+    view_readonly_float(ui, gui_state, mouse_state, im_str!("Time"), |m| {
+        m.time as f32
+    });
     view_readonly_float(
         ui,
         gui_state,
         mouse_state,
         im_str!("Left Encoder"),
-        |m| m.left,
+        |m| m.left as f32,
     );
     view_readonly_float(
         ui,
         gui_state,
         mouse_state,
         im_str!("Right Encoder"),
-        |m| m.right,
+        |m| m.right as f32,
     );
     view_readonly_float(
         ui,
         gui_state,
         mouse_state,
         im_str!("X Position"),
-        |m| m.x,
+        |m| m.x as f32,
     );
     view_readonly_float(
         ui,
         gui_state,
         mouse_state,
         im_str!("Y Position"),
-        |m| m.y,
+        |m| m.y as f32,
     );
     view_readonly_float(
         ui,
         gui_state,
         mouse_state,
         im_str!("Direction"),
-        |m| m.dir,
+        |m| m.dir as f32,
     );
 }
 
@@ -229,6 +238,13 @@ fn run_ui(
     gui_state: &mut GuiState,
     mouse_state: &Vec<MouseState>,
 ) {
+
+    let mouse_state: Vec<&MouseState> = if gui_state.history_active {
+        mouse_state.iter().filter(|m| (m.time as f32) < gui_state.history_time).collect()
+    } else {
+        mouse_state.iter().collect()
+    };
+
     ui.window(im_str!("Debug"))
         .size([400.0, 300.0], Condition::FirstUseEver)
         .build(|| {
@@ -238,6 +254,9 @@ fn run_ui(
     ui.window(im_str!("State"))
         .size([400.0, 300.0], Condition::FirstUseEver)
         .build(|| {
+            ui.checkbox(im_str!("Show history"), &mut gui_state.history_active);
+            ui.input_float(im_str!("Historic time"), &mut gui_state.history_time).build();
+
             if let Some(state) = mouse_state.last() {
                 view_state(ui, gui_state, state);
             } else {
@@ -245,19 +264,42 @@ fn run_ui(
             }
         });
 
-    ui.window(im_str!("Right graph"))
-        .size([800.0, 200.0], Condition::FirstUseEver)
-        .build(|| {
-            for (label, plot) in gui_state.plots.iter().filter(|(l, p)| p.showing) {
-                let points: Vec<_> = mouse_state.iter()
-                    .filter(|m| m.time > (mouse_state.last().map(|m| m.time).unwrap_or(0.0) - 10.0))
-                    .map(|m| (plot.function)(m) as f32)
-                    .collect();
-                ui.plot_lines(ImString::new(label).as_ref(), &points)
-                    .graph_size([800.0, 200.0])
-                    .scale_max(200.0)
-                    .scale_min(0.0)
-                    .build();
-            }
-        });
+    let count_plots = gui_state.plots.iter().filter(|(l, p)| p.showing).count();
+    if count_plots > 0 {
+        ui.window(im_str!("Plots"))
+            .size(
+                [800.0, (count_plots as f32) * 200.0],
+                Condition::FirstUseEver,
+            )
+            .build(|| {
+                let [width, height] = ui.get_window_size();
+                let mut range = &mut gui_state.plot_range;
+
+                ui.input_float(im_str!("plot range"), range).build();
+
+                for (label, mut plot) in
+                    gui_state.plots.iter_mut().filter(|(l, p)| p.showing)
+                {
+                    let last = mouse_state
+                        .last()
+                        .map(|m| m.time)
+                        .unwrap_or(0.0);
+
+                    let points: Vec<_> = mouse_state
+                        .iter()
+                        .filter(|m| m.time as f32 > last as f32 - *range)
+                        .map(|m| (plot.function)(m) as f32)
+                        .collect();
+
+                    ui.push_id(label);
+                    ui.text(label);
+                    ui.plot_lines(im_str!(""), &points)
+                        .graph_size([width - 50.0, 150.0])
+                        .scale_max(200.0)
+                        .scale_min(0.0)
+                        .build();
+                    ui.pop_id();
+                }
+            });
+    }
 }

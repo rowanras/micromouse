@@ -23,8 +23,9 @@ pub fn start<Msg: 'static + Send>(
             timeout: Duration::from_secs(1),
         };
 
-        if let Ok(mut port) = serialport::open_with_settings("/dev/ttyUSB0", &serial_settings) {
-
+        if let Ok(mut port) =
+            serialport::open_with_settings("/dev/ttyUSB0", &serial_settings)
+        {
             port.write_all(&[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
                 .expect("Could not write bytes");
 
