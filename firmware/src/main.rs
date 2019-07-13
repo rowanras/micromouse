@@ -34,8 +34,6 @@ pub mod time;
 pub mod uart;
 pub mod vl6180x;
 
-use core::fmt::Write;
-use core::str;
 use cortex_m_rt::entry;
 use stm32f4xx_hal as stm32f4;
 use stm32f4xx_hal::prelude::*;
@@ -43,26 +41,18 @@ use stm32f4xx_hal::stm32 as stm32f405;
 
 use ignore_result::Ignore;
 
+use micromouse_lib::control::MotionControl;
+
 use crate::battery::Battery;
 use crate::time::Time;
 
-use crate::uart::Command;
 use crate::uart::Uart;
 
 use crate::motors::Encoder;
 
 use crate::motors::left::{LeftEncoder, LeftMotor};
 use crate::motors::right::{RightEncoder, RightMotor};
-
-use crate::bot::Bot;
-use crate::config::BotConfig;
-
-use crate::control::Control;
-
-use crate::plan::Plan;
-
-use crate::navigate::LessRandomNavigate;
-use crate::navigate::RandomNavigate;
+use crate::motors::Motor;
 
 // Setup the master clock out
 pub fn mco2_setup(rcc: &stm32f405::RCC, gpioc: &stm32f405::GPIOC) {
@@ -86,10 +76,10 @@ fn main() -> ! {
 
     let mut uart = Uart::setup(&p.RCC, &mut cp.NVIC, p.USART1, &p.GPIOA);
 
-    let left_motor = LeftMotor::setup(&p.RCC, p.TIM3, &p.GPIOA);
+    let mut left_motor = LeftMotor::setup(&p.RCC, p.TIM3, &p.GPIOA);
     let left_encoder = LeftEncoder::setup(&p.RCC, &p.GPIOA, &p.GPIOB, p.TIM2);
 
-    let right_motor = RightMotor::setup(&p.RCC, p.TIM4, &p.GPIOB);
+    let mut right_motor = RightMotor::setup(&p.RCC, p.TIM4, &p.GPIOB);
     let right_encoder = RightEncoder::setup(&p.RCC, &p.GPIOA, p.TIM5);
 
     // Init the hal things
@@ -189,7 +179,7 @@ fn main() -> ! {
     //writeln!(uart, "Reading id registers").ignore();
 
     for _ in 0..2 {
-        let buf = front_distance.get_id_bytes();
+        let _buf = front_distance.get_id_bytes();
 
         //writeln!(uart, "{:x?}", buf).ignore();
 
@@ -197,7 +187,7 @@ fn main() -> ! {
     }
 
     for _ in 0..2 {
-        let buf = left_distance.get_id_bytes();
+        let _buf = left_distance.get_id_bytes();
 
         //writeln!(uart, "{:x?}", buf).ignore();
 
@@ -205,79 +195,75 @@ fn main() -> ! {
     }
 
     for _ in 0..2 {
-        let buf = right_distance.get_id_bytes();
+        let _buf = right_distance.get_id_bytes();
 
         //writeln!(uart, "{:x?}", buf).ignore();
 
         orange_led.toggle();
     }
-
-    /*
-    let config = BotConfig {
-        left_p: 2000.0,
-        left_i: 4.0,
-        left_d: 15000.0,
-        right_p: 2000.0,
-        right_i: 4.0,
-        right_d: 15000.0,
-        spin_p: 0.01,
-        spin_i: 0.0,
-        spin_d: 0.0,
-        spin_err: 15.0,
-        spin_settle: 50,
-        linear_p: 0.0185,
-        linear_i: 0.0,
-        linear_d: 0.1,
-        linear_spin_p: 0.015,
-        linear_spin_i: 0.000000002,
-        linear_spin_d: 0.0,
-        linear_spin_pos_p: 2.0,
-        linear_err: 10.0,
-        linear_front_err: 5.0,
-        linear_settle: 50,
-        ticks_per_spin: 2064.03,
-        ticks_per_cell: 1620.0,
-        cell_width: 180.0,
-        cell_offset: 53.0,
-        wall_threshold: 120.0,
-        front_wall_distance: 35.0,
-    };
-
-    let bot = Bot::new(
-        left_motor,
-        left_encoder,
-        right_motor,
-        right_encoder,
-        front_distance,
-        left_distance,
-        right_distance,
-        config,
-    );
-
-    let control = Control::new(bot);
-
-    /*
-    let navigate = RandomNavigate::new([
-        15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
-    ]);
-    */
-
-    let navigate = LessRandomNavigate::new([
-        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-    ]);
-
-    let mut plan = Plan::new(control, navigate);
-    */
-
-    //writeln!(uart, "\n\nstart").ignore();
-
-    let mut last_time: u32 = 0;
 
     let mut report = false;
+
+    let mut cmd: Option<[u8; 1]> = None;
 
     loop {
         let now: u32 = time.now();
 
+        if let Some(c) = cmd {
+            match c {
+                [0x01] => {
+                    report = false;
+                    cmd = None;
+                },
+
+                [0x02] => {
+                    report = true;
+                    cmd = None;
+                }
+
+                [0x03] => {
+                    let mut buf = [0; 2];
+                    if uart.read_exact(&mut buf).is_ok() {
+                        left_motor.change_power((buf[1] as i32) << 8 | (buf[0] as i32));
+                        cmd = None;
+                    }
+                }
+
+                [0x04] => {
+                    let mut buf = [0; 2];
+                    if uart.read_exact(&mut buf).is_ok() {
+                        right_motor.change_power((buf[1] as i32) << 8 | (buf[0] as i32));
+                        cmd = None;
+                    }
+                }
+
+                [0x05] => {
+                    let mut buf = [0; 4];
+                    if uart.read_exact(&mut buf).is_ok() {
+                        left_motor.change_power((buf[1] as i32) << 8 | (buf[0] as i32));
+                        right_motor.change_power((buf[3] as i32) << 8 | (buf[2] as i32));
+                        cmd = None;
+                    }
+                }
+
+                _ => {
+                    cmd = None;
+                }
+            }
+        } else {
+            let mut cmd_buf = [0; 1];
+            if uart.read_exact(&mut cmd_buf).is_ok() {
+                cmd = Some(cmd_buf);
+            }
+        }
+
+        if cmd.is_some() {
+            blue_led.set_high();
+        } else {
+            blue_led.set_low();
+        }
+
+        /*
         let mut rx_buf = [0; 8];
         if uart.read_exact(&mut rx_buf) == Ok(()) {
             if rx_buf[0] != 0 {
@@ -298,6 +284,7 @@ fn main() -> ! {
                 blue_led.set_low();
             }
         }
+        */
 
         if report && uart.tx_len() == Ok(0) {
             let left_count = left_encoder.count();

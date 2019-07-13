@@ -6,6 +6,7 @@ name = "micromouse"
 version = "0.1.0"
 
 [dependencies]
+micromouse_lib = { path = "../micromouse_lib" }
 cortex-m-rt = "0.6.5"
 cortex-m-semihosting = "0.3.2"
 cortex-m-rt-macros = "0.1.5"
@@ -25,7 +26,7 @@ version = "0.6.5"
 default-features = false
 
 [dependencies.arrayvec]
-version = "0.4.10"
+version = "0.4.11"
 default-features = false
 
 [dependencies.cortex-m]
