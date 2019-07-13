@@ -6,8 +6,8 @@
 //mod navigate;
 
 //mod plotters_cairo;
-mod uart;
 mod gui;
+mod uart;
 
 use std::f64;
 
@@ -162,12 +162,10 @@ fn main() {
 
     thread::spawn(move || {
         while let Ok(msg) = rx.recv() {
-
             let mut state = state_update.lock().unwrap();
 
             match msg {
                 Msg::Uart(time, left, right) => {
-
                     let time = time as f64 / 1000.0;
                     let left = config.mouse.ticks_to_mm(left as f64);
                     let right = config.mouse.ticks_to_mm(right as f64);
@@ -177,8 +175,9 @@ fn main() {
                         let delta_right = right - last_state.right;
 
                         let delta_linear = (delta_left + delta_right) / 2.0;
-                        let delta_angular =
-                            config.mouse.mm_to_rads((delta_left - delta_right) / 2.0);
+                        let delta_angular = config
+                            .mouse
+                            .mm_to_rads((delta_left - delta_right) / 2.0);
 
                         let mid_dir = last_state.dir + delta_angular / 2.0;
 
@@ -206,7 +205,9 @@ fn main() {
         }
     });
 
-    gui::start(Arc::clone(&states));
+    let gui_handle = gui::start(Arc::clone(&states));
 
-    loop{}
+    gui_handle.join().unwrap();
+
+    println!("bye");
 }
