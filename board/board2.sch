@@ -1162,7 +1162,7 @@ U 1 1 5CF8B427
 P 8900 5750
 F 0 "U7" H 8500 5200 50  0000 C CNN
 F 1 "MPU-6500" H 9200 5200 50  0000 C CNN
-F 2 "Sensor_Motion:InvenSense_QFN-24_4x4mm_P0.5mm" H 8900 4950 50  0001 C CNN
+F 2 "Sensor_Motion:InvenSense_QFN-24_3x3mm_P0.4mm" H 8900 4950 50  0001 C CNN
 F 3 "https://www.mouser.com/datasheet/2/400/MPU-6500-Datasheet2-1112506.pdf" H 8900 5600 50  0001 C CNN
 	1    8900 5750
 	1    0    0    -1  

@@ -1036,11 +1036,11 @@ Text Label 8950 4550 0    50   ~ 0
 PB4
 Text Label 9850 4550 2    50   ~ 0
 PB5
-Text Label 9850 4350 2    50   ~ 0
-PC15
-Text Label 9850 4250 2    50   ~ 0
-PC14
 Text Label 9850 4150 2    50   ~ 0
+PC15
+Text Label 9850 4350 2    50   ~ 0
+PC14
+Text Label 9850 4250 2    50   ~ 0
 PC13
 Text Label 8950 4150 0    50   ~ 0
 PC8

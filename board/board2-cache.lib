@@ -603,7 +603,7 @@ F1 "Sensor_Motion_MPU-6500" 300 -550 50 H V C CNN
 F2 "Sensor_Motion:InvenSense_QFN-24_4x4mm_P0.5mm" 0 -800 50 H I C CNN
 F3 "" 0 -150 50 H I C CNN
 $FPLIST
- *QFN-24*4x4mm*P0.5mm*
+ *QFN-24*3x3mm*P0.5mm*
 $ENDFPLIST
 DRAW
 S -500 500 500 -500 0 1 10 f
