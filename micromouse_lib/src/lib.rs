@@ -1,6 +1,10 @@
 #![no_std]
 
+pub mod control;
+
 use core::f64;
+
+use pid_control::DerivativeMode;
 
 pub const CONFIG2019: Config = Config {
     mouse: Mouse {
@@ -12,7 +16,24 @@ pub const CONFIG2019: Config = Config {
         length: 88.0,
         front_offset: 48.0,
     },
+
+    linear_motion: MotionControl {
+        p: 1.0,
+        i: 0.0,
+        d: 0.0,
+        d_mode: DerivativeMode::OnError,
+        acc: 1.0,
+    }
 };
+
+#[derive(Copy, Clone, Debug)]
+pub struct MotionControl {
+    p: f64,
+    i: f64,
+    d: f64,
+    d_mode: DerivativeMode,
+    acc: f64,
+}
 
 #[derive(Copy, Clone, Debug)]
 pub struct Mouse {
@@ -27,7 +48,8 @@ pub struct Mouse {
 
 impl Mouse {
     pub fn ticks_per_mm(&self) -> f64 {
-        (self.ticks_per_rev * self.gearbox_ratio) / (self.wheel_diameter * f64::consts::PI)
+        (self.ticks_per_rev * self.gearbox_ratio)
+            / (self.wheel_diameter * f64::consts::PI)
     }
 
     pub fn ticks_to_mm(&self, ticks: f64) -> f64 {
@@ -66,5 +88,5 @@ impl Mouse {
 #[derive(Copy, Clone, Debug)]
 pub struct Config {
     pub mouse: Mouse,
+    pub linear_motion: MotionControl,
 }
-
