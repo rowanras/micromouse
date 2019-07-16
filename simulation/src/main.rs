@@ -18,6 +18,9 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
 
+use std::time::Duration;
+use std::time::Instant;
+
 use image::ImageBuffer;
 
 use plotters::chart::ChartBuilder;
@@ -134,19 +137,22 @@ fn draw_maze<C: Visualize + Copy>(
 }
 */
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MouseState {
     time: f64,
-    left: f64,
-    right: f64,
-    x: f64,
-    y: f64,
-    dir: f64,
+    left: Option<f64>,
+    right: Option<f64>,
+    left_power: Option<f64>,
+    right_power: Option<f64>,
+    x: Option<f64>,
+    y: Option<f64>,
+    dir: Option<f64>,
 }
 
 #[derive(Debug)]
 enum Msg {
     Uart(u32, i32, i32),
+    Gui(gui::GuiMsg),
 }
 
 fn main() {
@@ -156,13 +162,32 @@ fn main() {
 
     let (tx, rx) = mpsc::channel();
 
-    uart::start(tx.clone(), Msg::Uart);
+    let uart_tx = uart::start(tx.clone(), Msg::Uart);
 
     let state_update = Arc::clone(&states);
 
     thread::spawn(move || {
+        let mut last_msg_instant = Instant::now();
         while let Ok(msg) = rx.recv() {
+            let elapsed_time = last_msg_instant.elapsed();
             let mut state = state_update.lock().unwrap();
+            let mut next_state = if let Some(last_state) = state.last()
+            {
+                last_state.clone()
+            } else {
+                MouseState {
+                    time: 0.0,
+                    left: None,
+                    right: None,
+                    left_power: None,
+                    right_power: None,
+                    x: None,
+                    y: None,
+                    dir: None,
+                }
+            };
+
+            let last_time = next_state.time;
 
             match msg {
                 Msg::Uart(time, left, right) => {
@@ -170,42 +195,64 @@ fn main() {
                     let left = config.mouse.ticks_to_mm(left as f64);
                     let right = config.mouse.ticks_to_mm(right as f64);
 
-                    let (x, y, dir) = if let Some(last_state) = state.last() {
-                        let delta_left = left - last_state.left;
-                        let delta_right = right - last_state.right;
 
-                        let delta_linear = (delta_left + delta_right) / 2.0;
-                        let delta_angular = config
-                            .mouse
-                            .mm_to_rads((delta_left - delta_right) / 2.0);
+                    let (dx, dy, ddir) =
+                        if let (Some(last_left), Some(last_right)) =
+                            (next_state.left, next_state.right)
+                        {
+                            let delta_left =
+                                left - next_state.left.unwrap_or(0.0);
+                            let delta_right =
+                                right - next_state.right.unwrap_or(0.0);
 
-                        let mid_dir = last_state.dir + delta_angular / 2.0;
+                            let delta_linear = (delta_left + delta_right) / 2.0;
+                            let delta_angular = config
+                                .mouse
+                                .mm_to_rads((delta_left - delta_right) / 2.0);
 
-                        (
-                            last_state.x + delta_linear * f64::cos(mid_dir),
-                            last_state.y + delta_linear * f64::sin(mid_dir),
-                            last_state.dir + delta_angular,
-                        )
-                    } else {
-                        (90.0, 90.0, f64::consts::PI / 2.0)
-                    };
+                            let mid_dir = next_state.dir.unwrap_or(0.0)
+                                + delta_angular / 2.0;
 
-                    let new_state = MouseState {
-                        time,
-                        left,
-                        right,
-                        x,
-                        y,
-                        dir,
-                    };
+                            (
+                                delta_linear * f64::cos(mid_dir),
+                                delta_linear * f64::sin(mid_dir),
+                                delta_angular,
+                            )
+                        } else {
+                            (0.0, 0.0, 0.0)
+                        };
 
-                    state.push(new_state);
+                    next_state.time = time;
+                    next_state.left = Some(left);
+                    next_state.right = Some(right);
+                    next_state.x = Some(next_state.x.unwrap_or(0.0) + dx);
+                    next_state.y = Some(next_state.y.unwrap_or(0.0) + dy);
+                    next_state.dir = Some(next_state.dir.unwrap_or(0.0) + ddir);
+
+                }
+
+                Msg::Gui(guimsg) => {
+                    println!("GuiMsg: {:?}", guimsg);
+
+                    match guimsg {
+                        gui::GuiMsg::LeftMotorPower(p) => next_state.left_power = Some(p),
+                        gui::GuiMsg::RightMotorPower(p) => next_state.right_power = Some(p),
+                    }
+
+                    uart_tx.send(guimsg);
                 }
             }
+
+            if last_time == next_state.time {
+                next_state.time += elapsed_time.as_secs() as f64 + elapsed_time.subsec_nanos() as f64 / 10e9;
+            }
+
+            state.push(next_state);
+            last_msg_instant += elapsed_time;
         }
     });
 
-    let gui_handle = gui::start(Arc::clone(&states));
+    let gui_handle = gui::start(Arc::clone(&states), tx.clone(), Msg::Gui);
 
     gui_handle.join().unwrap();
 

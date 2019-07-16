@@ -39,14 +39,13 @@ use crate::MouseState;
 
 #[derive(Debug)]
 pub enum GuiMsg {
-    LeftMotorPower(f64),
-    RightMotorPower(f64),
+    LeftMotorPower(i16),
+    RightMotorPower(i16),
 }
 
 struct Plot {
-    pub function: fn(&MouseState) -> Option<f64>,
+    pub function: fn(&MouseState) -> f32,
     pub showing: bool,
-    pub range: [f32; 2],
 }
 
 impl std::fmt::Debug for Plot {
@@ -61,231 +60,144 @@ struct State {
     pub plot_range: f32,
     pub history_time: f32,
     pub history_active: bool,
-    pub editables: HashMap<String, f32>,
 }
 
 impl State {
     pub fn new() -> State {
         State {
             plots: HashMap::new(),
-            plot_range: 10.0,
+            plot_range: 0.0,
             history_time: 0.0,
             history_active: false,
-            editables: HashMap::new(),
         }
     }
 }
 
-struct Gui<Msg: 'static + Send> {
-    pub tx: Sender<Msg>,
+struct Gui<'a, Msg: 'static + Send> {
+    pub tx: &'a Sender<Msg>,
     pub on_gui_msg: fn(GuiMsg) -> Msg,
-    pub state: State,
+    pub state: &'a mut State,
 }
 
-impl<Msg: 'static + Send> Gui<Msg> {
+impl<'a, Msg: 'static + Send> Gui<'a, Msg> {
     fn view_readonly_float(
         &mut self,
-        ui: &mut Ui,
+        &mut ui,
         mouse_state: &MouseState,
         label: &ImStr,
-        value: fn(&MouseState) -> Option<f64>,
+        value: fn(&MouseState) -> f32,
     ) {
         ui.push_id(label);
         let popup_id = ImString::new(format!("Popup_{}", label));
 
         ui.columns(2, im_str!("state"), false);
-        ui.text(&format!("{}: ", label));
+        ui.text(label);
         ui.same_line(0.0);
-        if let Some(value) = value(mouse_state) {
-            ui.text(&format!("{}", value));
-        } else {
-            ui.text("Unknown");
-        }
+        ui.text(&format!("{}", value(mouse_state)));
 
         ui.next_column();
 
         let key: &str = label.as_ref();
         if let Some(mut plot) = self.state.plots.get_mut(key) {
             ui.checkbox(im_str!("plot"), &mut plot.showing);
+            ui.next_column();
         } else {
+            ui.next_column();
             self.state.plots.insert(
                 key.to_string(),
                 Plot {
                     function: value,
                     showing: false,
-                    range: [200.0, 0.0]
                 },
             );
         }
 
-        ui.next_column();
-
-        ui.pop_id();
+        self.ui.pop_id();
     }
 
-    fn view_editable_float(
-        &mut self,
-        ui: &mut Ui,
-        mouse_state: &MouseState,
-        label: &ImStr,
-        value: fn(&MouseState) -> Option<f64>,
-        on_edit: fn(f64) -> GuiMsg
-    ) {
-        ui.push_id(label);
-        let popup_id = ImString::new(format!("Popup_{}", label));
+    fn view_state(&mut self, mouse_state: &MouseState) {
+        self.ui.columns(1, im_str!("headers"), false);
+        self.ui.text("Raw from the Mouse");
+        self.ui.next_column();
 
-        ui.columns(2, im_str!("state"), false);
-        ui.text(&format!("{}: ", label));
-        ui.same_line(0.0);
-        if let Some(value) = value(mouse_state) {
-            ui.text(&format!("{}", value));
-        } else {
-            ui.text("Unknown");
-        }
-
-        ui.next_column();
-
-        let key: &str = label.as_ref();
-        if let Some(mut plot) = self.state.plots.get_mut(key) {
-            ui.checkbox(im_str!("plot"), &mut plot.showing);
-        } else {
-            self.state.plots.insert(
-                key.to_string(),
-                Plot {
-                    function: value,
-                    showing: false,
-                    range: [200.0, 0.0]
-                },
-            );
-        }
-
-        ui.same_line(0.0);
-
-        if let Some(mut editable) = self.state.editables.get_mut(key) {
-            {
-                let _w = ui.push_item_width(-40.0);
-                ui.input_float(im_str!(""), editable).build();
-            }
-            ui.same_line(0.0);
-            {
-                let _w = ui.push_item_width(-1.0);
-                if ui.small_button(im_str!("Set")) {
-                    self.tx.send((self.on_gui_msg)(on_edit(*editable as f64)));
-                }
-            }
-        } else {
-            self.state.editables.insert(
-                key.to_string(),
-                value(mouse_state).unwrap_or(0.0) as f32,
-            );
-        }
-
-        ui.next_column();
-
-        ui.pop_id();
-    }
-
-    fn view_state(&mut self, ui: &mut Ui, mouse_state: &MouseState) {
-
-        ui.columns(1, im_str!("headers"), false);
-        ui.separator();
-        ui.text("Editable");
-        ui.next_column();
-
-        self.view_editable_float(
-            ui,
-            mouse_state,
-            im_str!("Left motor power"),
-            |m| m.left_power,
-            GuiMsg::LeftMotorPower,
-        );
-
-        ui.columns(1, im_str!("headers"), false);
-        ui.separator();
-        ui.text("Raw from the Mouse");
-        ui.next_column();
-
-        self.view_readonly_float(ui, mouse_state, im_str!("Time"), |m| {
-            Some(m.time)
+        self.view_readonly_float(mouse_state, im_str!("Time"), |m| {
+            m.time as f32
         });
-        self.view_readonly_float(
-            ui,
-            mouse_state,
-            im_str!("Left Encoder"),
-            |m| m.left,
-        );
-        self.view_readonly_float(
-            ui,
-            mouse_state,
-            im_str!("Right Encoder"),
-            |m| m.right,
-        );
-
-        ui.columns(1, im_str!("headers"), false);
-        ui.separator();
-        ui.text("Calculated from raw");
-        ui.next_column();
-
-        self.view_readonly_float(ui, mouse_state, im_str!("X Position"), |m| {
-            m.x
+        self.view_readonly_float(mouse_state, im_str!("Left Encoder"), |m| {
+            m.left as f32
         });
-        self.view_readonly_float(ui, mouse_state, im_str!("Y Position"), |m| {
-            m.y
+        self.view_readonly_float(mouse_state, im_str!("Right Encoder"), |m| {
+            m.right as f32
         });
-        self.view_readonly_float(ui, mouse_state, im_str!("Direction"), |m| {
-            m.dir
+
+        self.ui.columns(1, im_str!("headers"), false);
+        self.ui.text("Calculated from raw");
+        self.ui.next_column();
+
+        self.view_readonly_float(mouse_state, im_str!("X Position"), |m| {
+            m.x as f32
+        });
+        self.view_readonly_float(mouse_state, im_str!("Y Position"), |m| {
+            m.y as f32
+        });
+        self.view_readonly_float(mouse_state, im_str!("Direction"), |m| {
+            m.dir as f32
         });
     }
 
-    fn run_ui(&mut self, ui: &mut Ui, mouse_states: &[MouseState]) {
+    fn run_ui(&mut self) {
         let mouse_state: Vec<&MouseState> = if self.state.history_active {
-            mouse_states
+            self.mouse_states
                 .iter()
                 .filter(|m| (m.time as f32) < self.state.history_time)
                 .collect()
         } else {
-            mouse_states.iter().collect()
+            self.mouse_states.iter().collect()
         };
 
-        ui.window(im_str!("Debug"))
+        self.ui
+            .window(im_str!("Debug"))
             .size([400.0, 300.0], Condition::FirstUseEver)
             .build(|| {
-                ui.text(format!("{:#?}", self.state));
+                self.ui.text(format!("{:#?}", self.state));
             });
 
-        ui.window(im_str!("State"))
+        self.ui
+            .window(im_str!("State"))
             .size([400.0, 300.0], Condition::FirstUseEver)
             .build(|| {
-                ui.checkbox(
+                self.ui.checkbox(
                     im_str!("Show history"),
                     &mut self.state.history_active,
                 );
-                ui.input_float(
-                    im_str!("Historic time"),
-                    &mut self.state.history_time,
-                )
-                .build();
+                self.ui
+                    .input_float(
+                        im_str!("Historic time"),
+                        &mut self.state.history_time,
+                    )
+                    .build();
 
                 if let Some(state) = mouse_state.last() {
-                    self.view_state(ui, state);
+                    self.view_state(state);
                 } else {
-                    ui.text("No state yet :(");
+                    self.ui.text("No state yet :(");
                 }
             });
 
         let count_plots =
             self.state.plots.iter().filter(|(l, p)| p.showing).count();
         if count_plots > 0 {
-            ui.window(im_str!("Plots"))
+            self.ui
+                .window(im_str!("Plots"))
                 .size(
-                    [800.0, ((count_plots as f32) * 220.0) + 20.0],
+                    [800.0, (count_plots as f32) * 200.0],
                     Condition::FirstUseEver,
                 )
                 .build(|| {
-                    let [width, height] = ui.get_window_size();
+                    let [width, height] = self.ui.get_window_size();
                     let mut range = &mut self.state.plot_range;
 
-                    ui.input_float(im_str!("plot range"), range).build();
+                    self.ui.input_float(im_str!("plot range"), range).build();
 
                     for (label, mut plot) in
                         self.state.plots.iter_mut().filter(|(l, p)| p.showing)
@@ -296,24 +208,18 @@ impl<Msg: 'static + Send> Gui<Msg> {
                         let points: Vec<_> = mouse_state
                             .iter()
                             .filter(|m| m.time as f32 > last as f32 - *range)
-                            .map(|m| (plot.function)(m).unwrap_or(0.0) as f32)
+                            .map(|m| (plot.function)(m) as f32)
                             .collect();
 
-                        ui.push_id(label);
-                        ui.text(label);
-
-                        {
-                            let _w = ui.push_item_width(-50.0);
-                            ui.same_line(0.0);
-                            ui.input_float2(im_str!("y range"), &mut plot.range).build();
-                        }
-
-                        ui.plot_lines(im_str!(""), &points)
-                            .graph_size([width - 10.0, 150.0])
-                            .scale_max(plot.range[0])
-                            .scale_min(plot.range[1])
+                        self.ui.push_id(label);
+                        self.ui.text(label);
+                        self.ui
+                            .plot_lines(im_str!(""), &points)
+                            .graph_size([width - 50.0, 150.0])
+                            .scale_max(200.0)
+                            .scale_min(0.0)
                             .build();
-                        ui.pop_id();
+                        self.ui.pop_id();
                     }
                 });
         }
@@ -369,7 +275,7 @@ pub fn start<Msg: 'static + Send>(
         let mut renderer = GliumRenderer::init(&mut imgui, &display)
             .expect("Failed to initialize renderer");
 
-        let mut gui = Gui { tx, on_gui_msg, state: State::new() };
+        let mut state = State::new();
 
         let gl_window = display.gl_window();
         let window = gl_window.window();
@@ -394,8 +300,13 @@ pub fn start<Msg: 'static + Send>(
             last_frame = io.update_delta_time(last_frame);
             let mut ui = imgui.frame();
 
-            let mouse_states = mouse_state.lock().unwrap();
-            gui.run_ui(&mut ui, &mouse_states);
+
+            {
+                let mouse_states = mouse_state.lock().unwrap();
+                let mut gui = Gui { ui: &mut ui, tx: &tx, on_gui_msg, state: &mut state, mouse_states: &*mouse_states };
+                gui.run_ui();
+                drop(gui);
+            }
 
             let mut target = display.draw();
             target.clear_color_srgb(1.0, 1.0, 1.0, 1.0);
