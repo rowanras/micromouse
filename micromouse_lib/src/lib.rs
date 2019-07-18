@@ -1,6 +1,7 @@
 #![no_std]
 
 pub mod control;
+pub mod msgs;
 
 use core::f64;
 
@@ -23,7 +24,7 @@ pub const CONFIG2019: Config = Config {
         d: 0.0,
         d_mode: DerivativeMode::OnError,
         acc: 1.0,
-    }
+    },
 };
 
 #[derive(Copy, Clone, Debug)]
