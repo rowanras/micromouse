@@ -9,6 +9,9 @@ use cortex_m_rt_macros::interrupt as isr;
 use stm32f4xx_hal::stm32 as stm32f405;
 use stm32f4xx_hal::stm32::Interrupt as interrupt;
 
+use micromouse_lib::msgs::ReadExact;
+use micromouse_lib::msgs::WriteExact;
+
 pub trait Command {
     fn keyword_command(&self) -> &str;
     fn handle_command<'a, I: Iterator<Item = &'a str>>(
@@ -231,6 +234,40 @@ impl Uart {
     }
 
     pub fn read_exact(&mut self, fill_buf: &mut [u8]) -> Result<(), RxError> {
+        cortex_m::interrupt::free(|cs| {
+            if let Ok(mut buf) = RX_BUF.borrow(cs).try_borrow_mut() {
+                if buf.len >= fill_buf.len() {
+                    fill_buf.clone_from_slice(&buf.bytes[0..fill_buf.len()]);
+                    buf.len -= fill_buf.len();
+                    Ok(())
+                } else {
+                    Err(RxError::BufferEmpty)
+                }
+            } else {
+                Err(RxError::Busy)
+            }
+        })
+    }
+}
+
+impl ReadExact for Uart {
+    type Error = RxError;
+    fn peek(&mut self, fill_buf: &mut [u8]) -> Result<(), RxError> {
+        cortex_m::interrupt::free(|cs| {
+            if let Ok(buf) = RX_BUF.borrow(cs).try_borrow() {
+                if buf.len >= fill_buf.len() {
+                    fill_buf.clone_from_slice(&buf.bytes[0..fill_buf.len()]);
+                    Ok(())
+                } else {
+                    Err(RxError::BufferEmpty)
+                }
+            } else {
+                Err(RxError::Busy)
+            }
+        })
+    }
+
+    fn take(&mut self, fill_buf: &mut [u8]) -> Result<(), RxError> {
         cortex_m::interrupt::free(|cs| {
             if let Ok(mut buf) = RX_BUF.borrow(cs).try_borrow_mut() {
                 if buf.len >= fill_buf.len() {

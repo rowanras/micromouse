@@ -41,6 +41,9 @@ use stm32f4xx_hal::stm32 as stm32f405;
 
 use ignore_result::Ignore;
 
+use micromouse_lib::CONFIG2019;
+use micromouse_lib::msgs::Msg;
+use micromouse_lib::msgs::ParseError;
 use micromouse_lib::control::MotionControl;
 
 use crate::battery::Battery;
@@ -64,6 +67,9 @@ pub fn mco2_setup(rcc: &stm32f405::RCC, gpioc: &stm32f405::GPIOC) {
 
 #[entry]
 fn main() -> ! {
+
+    let config = CONFIG2019;
+
     let p = stm32f4::stm32::Peripherals::take().unwrap();
     let mut cp = stm32f405::CorePeripherals::take().unwrap();
 
@@ -202,87 +208,42 @@ fn main() -> ! {
         orange_led.toggle();
     }
 
+    let linear_control = MotionControl::new(1.0, 0.0, 0.0, 1.0);
+
     let mut report = false;
 
-    let mut cmd: Option<[u8; 1]> = None;
+    //let mut cmd: Option<[u8; 1]> = None;
+
+    let mut last_control = 0;
 
     loop {
         let now: u32 = time.now();
 
-        if let Some(c) = cmd {
-            match c {
-                [0x01] => {
-                    report = false;
-                    cmd = None;
-                },
+        let msg = Msg::parse_bytes(&mut uart);
 
-                [0x02] => {
-                    report = true;
-                    cmd = None;
-                }
-
-                [0x03] => {
-                    let mut buf = [0; 2];
-                    if uart.read_exact(&mut buf).is_ok() {
-                        left_motor.change_power((buf[1] as i32) << 8 | (buf[0] as i32));
-                        cmd = None;
-                    }
-                }
-
-                [0x04] => {
-                    let mut buf = [0; 2];
-                    if uart.read_exact(&mut buf).is_ok() {
-                        right_motor.change_power((buf[1] as i32) << 8 | (buf[0] as i32));
-                        cmd = None;
-                    }
-                }
-
-                [0x05] => {
-                    let mut buf = [0; 4];
-                    if uart.read_exact(&mut buf).is_ok() {
-                        left_motor.change_power((buf[1] as i32) << 8 | (buf[0] as i32));
-                        right_motor.change_power((buf[3] as i32) << 8 | (buf[2] as i32));
-                        cmd = None;
-                    }
-                }
-
-                _ => {
-                    cmd = None;
-                }
-            }
-        } else {
-            let mut cmd_buf = [0; 1];
-            if uart.read_exact(&mut cmd_buf).is_ok() {
-                cmd = Some(cmd_buf);
-            }
+        match msg {
+            Ok(Msg::Time(_)) => {},
+            Ok(Msg::EnableLogging) => report = true,
+            Ok(Msg::DisableLogging) => report = false,
+            Ok(Msg::LeftEncoder(_)) => {},
+            Ok(Msg::RightEncoder(_)) => {},
+            Ok(Msg::LeftMotorPower(m)) => left_motor.change_power((m * 10000.0) as i32),
+            Ok(Msg::RightMotorPower(m)) => right_motor.change_power((m * 10000.0) as i32),
+            Err(ParseError::UnknownMsg(_)) => orange_led.set_high(),
+            Err(_) => {},
         }
 
-        if cmd.is_some() {
-            blue_led.set_high();
+        if report {
+            green_led.set_high();
         } else {
-            blue_led.set_low();
+            green_led.set_low();
         }
 
         /*
-        let mut rx_buf = [0; 8];
-        if uart.read_exact(&mut rx_buf) == Ok(()) {
-            if rx_buf[0] != 0 {
-                report = true;
-            } else {
-                report = false;
-            }
+        let left_position = left_encoder.count();
 
-            if rx_buf[1] != 0{
-                red_led.set_high();
-            } else {
-                red_led.set_low();
-            }
-
-            if rx_buf[2] != 0{
-                blue_led.set_high();
-            } else {
-                blue_led.set_low();
-            }
+        if now - last_control > 10 {
+            linear_control.update(
         }
         */
 
@@ -301,8 +262,6 @@ fn main() -> ! {
             ];
 
             uart.add_bytes(&buffer).ignore();
-
-            green_led.toggle();
         }
 
         battery.update(now);
