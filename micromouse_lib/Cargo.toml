@@ -9,6 +9,14 @@ edition = "2018"
 [dependencies]
 pid_control = { git = "https://github.com/mbr/pid_control-rs" }
 
+[dependencies.num-traits]
+version = "0.2.0"
+default-features = false
+
+[dependencies.num-derive]
+version = "0.2.0"
+default-features = false
+
 [dependencies.arrayvec]
 version = "0.4.11"
 default-features = false

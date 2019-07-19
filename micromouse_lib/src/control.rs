@@ -24,15 +24,9 @@ pub struct MotionControl {
 }
 
 impl MotionControl {
-    pub fn new(
-        p: f64,
-        i: f64,
-        d: f64,
-        d_mode: DerivativeMode,
-        acc: f64,
-    ) -> MotionControl {
+    pub fn new(p: f64, i: f64, d: f64, acc: f64) -> MotionControl {
         let mut pid = PIDController::new(p, i, d);
-        pid.d_mode = d_mode;
+        pid.d_mode = DerivativeMode::OnMeasurement;
 
         MotionControl {
             pid,
@@ -50,11 +44,7 @@ impl MotionControl {
         self.target_buffer.try_insert(0, target).is_ok()
     }
 
-    pub fn update(
-        &mut self,
-        now: f64,
-        position: f64,
-    ) -> f64 {
+    pub fn update(&mut self, now: f64, position: f64) -> f64 {
         let delta_time = now - self.last_time;
 
         self.velocity += self.acceleration * delta_time;

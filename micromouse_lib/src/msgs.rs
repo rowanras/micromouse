@@ -1,6 +1,9 @@
 use core::convert::From;
-use core::i16;
+use core::f32;
 use core::u32;
+
+use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
 
 pub trait ReadExact {
     type Error;
@@ -13,14 +16,67 @@ pub trait WriteExact {
     fn write(&mut self, buf: &[u8]) -> Result<(), Self::Error>;
 }
 
+#[derive(FromPrimitive)]
+pub enum MsgId {
+    // Core
+    Time = 0x00,
+    EnableLog = 0x01,
+    DisableLog = 0x02,
+
+    // Raw in/out
+    LeftPos = 0x10,
+    RightPos = 0x11,
+    LeftPower = 0x12,
+    RightPower = 0x13,
+
+    // Calculated
+    LinearPos = 0x20,
+    AngularPos = 0x21,
+    LinearSet = 0x22,
+    AngularSet = 0x23,
+    AddLinear = 0x24,
+    AddAngular = 0x25,
+
+    // Config
+    LinearP = 0xa0,
+    LinearI = 0xa1,
+    LinearD = 0xa2,
+    LinearAcc = 0xa3,
+    AngularP = 0xa4,
+    AngularI = 0xa5,
+    AngularD = 0xa6,
+    AngularAcc = 0xa7,
+}
+
 pub enum Msg {
-    Time(f64),
-    EnableLogging,
-    DisableLogging,
-    LeftEncoder(f64),
-    RightEncoder(f64),
-    LeftMotorPower(f64),
-    RightMotorPower(f64),
+    // Core
+    Time(f32),
+    EnableLog,
+    DisableLog,
+
+    // Raw in/out
+    LeftPos(f32),
+    RightPos(f32),
+    LeftPower(f32),
+    RightPower(f32),
+
+    // Calculated
+    LinearPos(f32),
+    AngularPos(f32),
+    LinearSet(f32),
+    AngularSet(f32),
+    AddLinear(f32, f32),
+    AddAngular(f32, f32),
+
+    // Config
+    LinearP(f32),
+    LinearI(f32),
+    LinearD(f32),
+    LinearAcc(f32),
+    AngularP(f32),
+    AngularI(f32),
+    AngularD(f32),
+    AngularAcc(f32),
 }
 
 pub enum ParseError<E> {
@@ -34,6 +90,65 @@ impl<E> From<E> for ParseError<E> {
     }
 }
 
+fn parse_id<R: ReadExact<Error = E>, E>(
+    buf: &mut R,
+    msg: Msg,
+) -> Result<Msg, ParseError<E>> {
+    let mut msgbuf = [0; 1];
+    buf.take(&mut msgbuf)?;
+    Ok(msg)
+}
+
+fn parse_f32<R: ReadExact<Error = E>, E>(
+    buf: &mut R,
+    msg: fn(f32) -> Msg,
+) -> Result<Msg, ParseError<E>> {
+    let mut msgbuf = [0; 5];
+    buf.take(&mut msgbuf)?;
+    let [_, a1, a2, a3, a4] = msgbuf;
+    Ok(msg(f32::from_bits(u32::from_le_bytes([a1, a2, a3, a4]))))
+}
+
+fn parse_2f32<R: ReadExact<Error = E>, E>(
+    buf: &mut R,
+    msg: fn(f32, f32) -> Msg,
+) -> Result<Msg, ParseError<E>> {
+    let mut msgbuf = [0; 9];
+    buf.take(&mut msgbuf)?;
+    let [_, a1, a2, a3, a4, b1, b2, b3, b4] = msgbuf;
+    Ok(msg(
+        f32::from_bits(u32::from_le_bytes([a1, a2, a3, a4])),
+        f32::from_bits(u32::from_le_bytes([b1, b2, b3, b4])),
+    ))
+}
+
+fn write_id<W: WriteExact<Error = E>, E>(
+    buf: &mut W,
+    msgid: MsgId,
+) -> Result<(), E> {
+    buf.write(&[msgid as u8])
+}
+
+fn write_f32<W: WriteExact<Error = E>, E>(
+    buf: &mut W,
+    msgid: MsgId,
+    msg: f32,
+) -> Result<(), E> {
+    let [a1, a2, a3, a4] = u32::to_le_bytes(f32::to_bits(msg));
+    buf.write(&[msgid as u8, a1, a2, a3, a4])
+}
+
+fn write_2f32<W: WriteExact<Error = E>, E>(
+    buf: &mut W,
+    msgid: MsgId,
+    msg1: f32,
+    msg2: f32,
+) -> Result<(), E> {
+    let [a1, a2, a3, a4] = u32::to_le_bytes(f32::to_bits(msg1));
+    let [b1, b2, b3, b4] = u32::to_le_bytes(f32::to_bits(msg2));
+    buf.write(&[msgid as u8, a1, a2, a3, a4, b1, b2, b3, b4])
+}
+
 impl Msg {
     pub fn parse_bytes<R: ReadExact<Error = E>, E>(
         buf: &mut R,
@@ -41,50 +156,34 @@ impl Msg {
         let mut id = [0; 1];
         buf.peek(&mut id)?;
 
-        match id {
-            [0x00] => {
-                let mut msg = [0; 5];
-                buf.take(&mut msg)?;
-                let [_, b1, b2, b3, b4] = msg;
-                Ok(Msg::Time(
-                    u32::from_le_bytes([b1, b2, b3, b4]) as f64 / 1000.0,
-                ))
-            }
-            [0x01] => {
-                let mut msg = [0; 1];
-                buf.take(&mut msg)?;
-                Ok(Msg::EnableLogging)
-            }
-            [0x02] => {
-                let mut msg = [0; 1];
-                buf.take(&mut msg)?;
-                Ok(Msg::DisableLogging)
-            }
-            [0x10] => {
-                let mut msg = [0; 3];
-                buf.take(&mut msg)?;
-                let [_, b1, b2] = msg;
-                Ok(Msg::LeftEncoder(i16::from_le_bytes([b1, b2]) as f64))
-            }
-            [0x11] => {
-                let mut msg = [0; 3];
-                buf.take(&mut msg)?;
-                let [_, b1, b2] = msg;
-                Ok(Msg::RightEncoder(i16::from_le_bytes([b1, b2]) as f64))
-            }
-            [0x12] => {
-                let mut msg = [0; 3];
-                buf.take(&mut msg)?;
-                let [_, b1, b2] = msg;
-                Ok(Msg::LeftMotorPower(i16::from_le_bytes([b1, b2]) as f64 / 1000.0))
-            }
-            [0x13] => {
-                let mut msg = [0; 3];
-                buf.take(&mut msg)?;
-                let [_, b1, b2] = msg;
-                Ok(Msg::RightMotorPower(i16::from_le_bytes([b1, b2]) as f64 / 1000.0))
-            }
-            [id] => Err(ParseError::UnknownMsg(id)),
+        match MsgId::from_u8(id[0]) {
+            Some(MsgId::Time) => parse_f32(buf, Msg::Time),
+            Some(MsgId::EnableLog) => parse_id(buf, Msg::EnableLog),
+            Some(MsgId::DisableLog) => parse_id(buf, Msg::DisableLog),
+
+            Some(MsgId::LeftPos) => parse_f32(buf, Msg::LeftPos),
+            Some(MsgId::RightPos) => parse_f32(buf, Msg::RightPos),
+            Some(MsgId::LeftPower) => parse_f32(buf, Msg::LeftPower),
+            Some(MsgId::RightPower) => parse_f32(buf, Msg::RightPower),
+
+            Some(MsgId::LinearPos) => parse_f32(buf, Msg::LinearPos),
+            Some(MsgId::AngularPos) => parse_f32(buf, Msg::AngularPos),
+            Some(MsgId::LinearSet) => parse_f32(buf, Msg::LinearSet),
+            Some(MsgId::AngularSet) => parse_f32(buf, Msg::AngularSet),
+            Some(MsgId::AddLinear) => parse_2f32(buf, Msg::AddLinear),
+            Some(MsgId::AddAngular) => parse_2f32(buf, Msg::AddAngular),
+
+            Some(MsgId::LinearP) => parse_f32(buf, Msg::LinearP),
+            Some(MsgId::LinearI) => parse_f32(buf, Msg::LinearI),
+            Some(MsgId::LinearD) => parse_f32(buf, Msg::LinearD),
+            Some(MsgId::LinearAcc) => parse_f32(buf, Msg::LinearAcc),
+
+            Some(MsgId::AngularP) => parse_f32(buf, Msg::AngularP),
+            Some(MsgId::AngularI) => parse_f32(buf, Msg::AngularI),
+            Some(MsgId::AngularD) => parse_f32(buf, Msg::AngularD),
+            Some(MsgId::AngularAcc) => parse_f32(buf, Msg::AngularAcc),
+
+            None => Err(ParseError::UnknownMsg(id[0])),
         }
     }
 
@@ -92,29 +191,32 @@ impl Msg {
         &self,
         buf: &mut W,
     ) -> Result<(), E> {
-        match self {
-            &Msg::Time(m) => {
-                let [b1, b2, b3, b4] = (m as u32).to_le_bytes();
-                buf.write(&[0x00, b1, b2, b3, b4])
-            }
-            &Msg::EnableLogging => buf.write(&[0x01]),
-            &Msg::DisableLogging => buf.write(&[0x02]),
-            &Msg::LeftEncoder(m) => {
-                let [b1, b2] = (m as i16).to_le_bytes();
-                buf.write(&[0x10, b1, b2])
-            }
-            &Msg::RightEncoder(m) => {
-                let [b1, b2] = (m as i16).to_le_bytes();
-                buf.write(&[0x11, b1, b2])
-            }
-            &Msg::LeftMotorPower(m) => {
-                let [b1, b2] = (m as i16).to_le_bytes();
-                buf.write(&[0x12, b1, b2])
-            }
-            &Msg::RightMotorPower(m) => {
-                let [b1, b2] = (m as i16).to_le_bytes();
-                buf.write(&[0x13, b1, b2])
-            }
+        match *self {
+            Msg::Time(m) => write_f32(buf, MsgId::Time, m),
+            Msg::EnableLog => write_id(buf, MsgId::EnableLog),
+            Msg::DisableLog => write_id(buf, MsgId::DisableLog),
+
+            Msg::LeftPos(m) => write_f32(buf, MsgId::LeftPos, m),
+            Msg::RightPos(m) => write_f32(buf, MsgId::RightPos, m),
+            Msg::LeftPower(m) => write_f32(buf, MsgId::LeftPower, m),
+            Msg::RightPower(m) => write_f32(buf, MsgId::RightPower, m),
+
+            Msg::LinearPos(m) => write_f32(buf, MsgId::LinearPos, m),
+            Msg::AngularPos(m) => write_f32(buf, MsgId::AngularPos, m),
+            Msg::LinearSet(m) => write_f32(buf, MsgId::LinearSet, m),
+            Msg::AngularSet(m) => write_f32(buf, MsgId::AngularSet, m),
+            Msg::AddLinear(m1, m2) => write_2f32(buf, MsgId::AddLinear, m1, m2),
+            Msg::AddAngular(m1, m2) => write_2f32(buf, MsgId::AddAngular, m1, m2),
+
+            Msg::LinearP(m) => write_f32(buf, MsgId::LinearP, m),
+            Msg::LinearI(m) => write_f32(buf, MsgId::LinearI, m),
+            Msg::LinearD(m) => write_f32(buf, MsgId::LinearD, m),
+            Msg::LinearAcc(m) => write_f32(buf, MsgId::LinearAcc, m),
+
+            Msg::AngularP(m) => write_f32(buf, MsgId::AngularP, m),
+            Msg::AngularI(m) => write_f32(buf, MsgId::AngularI, m),
+            Msg::AngularD(m) => write_f32(buf, MsgId::AngularD, m),
+            Msg::AngularAcc(m) => write_f32(buf, MsgId::AngularAcc, m),
         }
     }
 }
