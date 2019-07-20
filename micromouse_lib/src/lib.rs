@@ -3,7 +3,7 @@
 pub mod control;
 pub mod msgs;
 
-use core::f64;
+use core::f32;
 
 use pid_control::DerivativeMode;
 
@@ -29,59 +29,59 @@ pub const CONFIG2019: Config = Config {
 
 #[derive(Copy, Clone, Debug)]
 pub struct MotionControl {
-    p: f64,
-    i: f64,
-    d: f64,
+    p: f32,
+    i: f32,
+    d: f32,
     d_mode: DerivativeMode,
-    acc: f64,
+    acc: f32,
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct Mouse {
-    pub wheel_diameter: f64,
-    pub gearbox_ratio: f64,
-    pub ticks_per_rev: f64,
-    pub wheelbase: f64,
-    pub width: f64,
-    pub length: f64,
-    pub front_offset: f64,
+    pub wheel_diameter: f32,
+    pub gearbox_ratio: f32,
+    pub ticks_per_rev: f32,
+    pub wheelbase: f32,
+    pub width: f32,
+    pub length: f32,
+    pub front_offset: f32,
 }
 
 impl Mouse {
-    pub fn ticks_per_mm(&self) -> f64 {
+    pub fn ticks_per_mm(&self) -> f32 {
         (self.ticks_per_rev * self.gearbox_ratio)
-            / (self.wheel_diameter * f64::consts::PI)
+            / (self.wheel_diameter * f32::consts::PI)
     }
 
-    pub fn ticks_to_mm(&self, ticks: f64) -> f64 {
+    pub fn ticks_to_mm(&self, ticks: f32) -> f32 {
         ticks / self.ticks_per_mm()
     }
 
-    pub fn mm_to_ticks(&self, mm: f64) -> f64 {
+    pub fn mm_to_ticks(&self, mm: f32) -> f32 {
         mm * self.ticks_per_mm()
     }
 
-    pub fn ticks_per_rad(&self) -> f64 {
+    pub fn ticks_per_rad(&self) -> f32 {
         self.mm_to_ticks(self.wheelbase / 2.0)
     }
 
-    pub fn ticks_to_rads(&self, ticks: f64) -> f64 {
+    pub fn ticks_to_rads(&self, ticks: f32) -> f32 {
         ticks / self.ticks_per_rad()
     }
 
-    pub fn rads_to_ticks(&self, rads: f64) -> f64 {
+    pub fn rads_to_ticks(&self, rads: f32) -> f32 {
         rads * self.ticks_per_rad()
     }
 
-    pub fn mm_per_rad(&self) -> f64 {
+    pub fn mm_per_rad(&self) -> f32 {
         self.wheelbase / 2.0
     }
 
-    pub fn mm_to_rads(&self, mm: f64) -> f64 {
+    pub fn mm_to_rads(&self, mm: f32) -> f32 {
         mm / self.mm_per_rad()
     }
 
-    pub fn rads_to_mm(&self, rads: f64) -> f64 {
+    pub fn rads_to_mm(&self, rads: f32) -> f32 {
         rads * self.mm_per_rad()
     }
 }
