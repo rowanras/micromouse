@@ -284,6 +284,13 @@ impl ReadExact for Uart {
     }
 }
 
+impl WriteExact for Uart {
+    type Error = TxError;
+    fn write(&mut self, fill_buf: &[u8]) -> Result<(), TxError> {
+        self.add_bytes(fill_buf)
+    }
+}
+
 impl Write for Uart {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         self.add_str(s).map(|_| ()).map_err(|_| fmt::Error)
