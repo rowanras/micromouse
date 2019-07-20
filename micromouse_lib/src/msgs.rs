@@ -5,6 +5,8 @@ use core::u32;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
+use arrayvec::ArrayVec;
+
 pub trait ReadExact {
     type Error;
     fn peek(&mut self, buf: &mut [u8]) -> Result<(), Self::Error>;
@@ -16,12 +18,12 @@ pub trait WriteExact {
     fn write(&mut self, buf: &[u8]) -> Result<(), Self::Error>;
 }
 
-#[derive(FromPrimitive)]
+#[derive(FromPrimitive, Copy, Clone)]
 pub enum MsgId {
     // Core
     Time = 0x00,
-    EnableLog = 0x01,
-    DisableLog = 0x02,
+    Logged = 0x01,
+    Provided = 0x02,
 
     // Raw in/out
     LeftPos = 0x10,
@@ -51,8 +53,8 @@ pub enum MsgId {
 pub enum Msg {
     // Core
     Time(f32),
-    EnableLog,
-    DisableLog,
+    Logged(ArrayVec<[MsgId; 8]>),
+    Provided(ArrayVec<[MsgId; 8]>),
 
     // Raw in/out
     LeftPos(f32),
@@ -90,6 +92,7 @@ impl<E> From<E> for ParseError<E> {
     }
 }
 
+#[allow(dead_code)]
 fn parse_id<R: ReadExact<Error = E>, E>(
     buf: &mut R,
     msg: Msg,
@@ -122,6 +125,24 @@ fn parse_2f32<R: ReadExact<Error = E>, E>(
     ))
 }
 
+fn parse_msgids<R: ReadExact<Error = E>, E>(
+    buf: &mut R,
+    msg: fn(ArrayVec<[MsgId; 8]>) -> Msg,
+) -> Result<Msg, ParseError<E>> {
+    // attept to get the length
+    let mut lenbuf = [0; 2];
+    buf.peek(&mut lenbuf)?;
+    let [_id, len] = lenbuf;
+
+    let msgbuf = &mut [0; 10][0..(len+2) as usize];
+    buf.take(msgbuf)?;
+
+    let msgids: ArrayVec<[MsgId; 8]> = msgbuf.into_iter().skip(2).filter_map(|&mut m| MsgId::from_u8(m)).collect();
+
+    Ok(msg(msgids))
+}
+
+#[allow(dead_code)]
 fn write_id<W: WriteExact<Error = E>, E>(
     buf: &mut W,
     msgid: MsgId,
@@ -149,6 +170,20 @@ fn write_2f32<W: WriteExact<Error = E>, E>(
     buf.write(&[msgid as u8, a1, a2, a3, a4, b1, b2, b3, b4])
 }
 
+fn write_msgids<W: WriteExact<Error = E>, E>(
+    buf: &mut W,
+    msgid: MsgId,
+    msgids: &[MsgId],
+) -> Result<(), E> {
+    let bytes: ArrayVec<[u8; 9]> = [msgid as u8]
+        .into_iter()
+        .map(|&m| m)
+        .chain([msgids.len() as u8].into_iter().map(|&l| l))
+        .chain(msgids.into_iter().map(|&m| m as u8))
+        .collect();
+    buf.write(&bytes)
+}
+
 impl Msg {
     pub fn parse_bytes<R: ReadExact<Error = E>, E>(
         buf: &mut R,
@@ -158,8 +193,8 @@ impl Msg {
 
         match MsgId::from_u8(id[0]) {
             Some(MsgId::Time) => parse_f32(buf, Msg::Time),
-            Some(MsgId::EnableLog) => parse_id(buf, Msg::EnableLog),
-            Some(MsgId::DisableLog) => parse_id(buf, Msg::DisableLog),
+            Some(MsgId::Logged) => parse_msgids(buf, Msg::Logged),
+            Some(MsgId::Provided) => parse_msgids(buf, Msg::Provided),
 
             Some(MsgId::LeftPos) => parse_f32(buf, Msg::LeftPos),
             Some(MsgId::RightPos) => parse_f32(buf, Msg::RightPos),
@@ -191,32 +226,36 @@ impl Msg {
         &self,
         buf: &mut W,
     ) -> Result<(), E> {
-        match *self {
-            Msg::Time(m) => write_f32(buf, MsgId::Time, m),
-            Msg::EnableLog => write_id(buf, MsgId::EnableLog),
-            Msg::DisableLog => write_id(buf, MsgId::DisableLog),
+        match self {
+            &Msg::Time(m) => write_f32(buf, MsgId::Time, m),
+            &Msg::Logged(ref m) => write_msgids(buf, MsgId::Logged, m),
+            &Msg::Provided(ref m) => write_msgids(buf, MsgId::Provided, m),
 
-            Msg::LeftPos(m) => write_f32(buf, MsgId::LeftPos, m),
-            Msg::RightPos(m) => write_f32(buf, MsgId::RightPos, m),
-            Msg::LeftPower(m) => write_f32(buf, MsgId::LeftPower, m),
-            Msg::RightPower(m) => write_f32(buf, MsgId::RightPower, m),
+            &Msg::LeftPos(m) => write_f32(buf, MsgId::LeftPos, m),
+            &Msg::RightPos(m) => write_f32(buf, MsgId::RightPos, m),
+            &Msg::LeftPower(m) => write_f32(buf, MsgId::LeftPower, m),
+            &Msg::RightPower(m) => write_f32(buf, MsgId::RightPower, m),
 
-            Msg::LinearPos(m) => write_f32(buf, MsgId::LinearPos, m),
-            Msg::AngularPos(m) => write_f32(buf, MsgId::AngularPos, m),
-            Msg::LinearSet(m) => write_f32(buf, MsgId::LinearSet, m),
-            Msg::AngularSet(m) => write_f32(buf, MsgId::AngularSet, m),
-            Msg::AddLinear(m1, m2) => write_2f32(buf, MsgId::AddLinear, m1, m2),
-            Msg::AddAngular(m1, m2) => write_2f32(buf, MsgId::AddAngular, m1, m2),
+            &Msg::LinearPos(m) => write_f32(buf, MsgId::LinearPos, m),
+            &Msg::AngularPos(m) => write_f32(buf, MsgId::AngularPos, m),
+            &Msg::LinearSet(m) => write_f32(buf, MsgId::LinearSet, m),
+            &Msg::AngularSet(m) => write_f32(buf, MsgId::AngularSet, m),
+            &Msg::AddLinear(m1, m2) => {
+                write_2f32(buf, MsgId::AddLinear, m1, m2)
+            }
+            &Msg::AddAngular(m1, m2) => {
+                write_2f32(buf, MsgId::AddAngular, m1, m2)
+            }
 
-            Msg::LinearP(m) => write_f32(buf, MsgId::LinearP, m),
-            Msg::LinearI(m) => write_f32(buf, MsgId::LinearI, m),
-            Msg::LinearD(m) => write_f32(buf, MsgId::LinearD, m),
-            Msg::LinearAcc(m) => write_f32(buf, MsgId::LinearAcc, m),
+            &Msg::LinearP(m) => write_f32(buf, MsgId::LinearP, m),
+            &Msg::LinearI(m) => write_f32(buf, MsgId::LinearI, m),
+            &Msg::LinearD(m) => write_f32(buf, MsgId::LinearD, m),
+            &Msg::LinearAcc(m) => write_f32(buf, MsgId::LinearAcc, m),
 
-            Msg::AngularP(m) => write_f32(buf, MsgId::AngularP, m),
-            Msg::AngularI(m) => write_f32(buf, MsgId::AngularI, m),
-            Msg::AngularD(m) => write_f32(buf, MsgId::AngularD, m),
-            Msg::AngularAcc(m) => write_f32(buf, MsgId::AngularAcc, m),
+            &Msg::AngularP(m) => write_f32(buf, MsgId::AngularP, m),
+            &Msg::AngularI(m) => write_f32(buf, MsgId::AngularI, m),
+            &Msg::AngularD(m) => write_f32(buf, MsgId::AngularD, m),
+            &Msg::AngularAcc(m) => write_f32(buf, MsgId::AngularAcc, m),
         }
     }
 }
