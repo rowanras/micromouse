@@ -9,7 +9,7 @@
 mod gui;
 mod uart;
 
-use std::f64;
+use std::f32;
 
 use std::io::Read;
 
@@ -32,133 +32,85 @@ use plotters::style::IntoFont;
 use plotters::style::Palette;
 
 use micromouse_lib::CONFIG2019;
+use micromouse_lib::msgs::Msg as MouseMsg;
 
-//use maze2::Edge;
-//use maze2::Maze;
-
-/*
-use navigate::Navigate;
-use navigate::CountingDeadEndNavigate;
-use navigate::CountingNavigate;
-use navigate::DeadEndNavigate;
-use navigate::FloodFillDeadEndNavigate;
-use navigate::FloodFillNavigate;
-use navigate::FloodFillSquareDeadEndNavigate;
-use navigate::FloodFillSquareNavigate;
-use navigate::LeftWall;
-use navigate::RandomNavigate;
-use navigate::TwelvePartitionNavigate;
-
-use mouse::Direction;
-use mouse::Mouse;
-*/
-
-pub const MM_PER_PIXEL: f64 = 10.0;
-
-/*
-pub trait Visualize {
-    fn color(&self) -> [f32; 4];
-    fn text(&self) -> String;
+pub struct SimulatorState {
+    mouse_states: Vec<MouseState>,
+    uart_buffer_len: usize,
 }
 
-impl Visualize for () {
-    fn color(&self) -> [f32; 4] {
-        [0.0; 4]
-    }
-    fn text(&self) -> String {
-        "".to_owned()
-    }
-}
-
-impl Visualize for u8 {
-    fn color(&self) -> [f32; 4] {
-        [1.0, 0.0, 0.0, *self as f32 / 16.0]
-    }
-    fn text(&self) -> String {
-        self.to_string()
-    }
-}
-
-impl Visualize for bool {
-    fn color(&self) -> [f32; 4] {
-        [1.0, 0.0, 0.0, if *self { 1.0 } else { 0.0 }]
-    }
-    fn text(&self) -> String {
-        self.to_string()
-    }
-}
-
-fn edge_to_opacity(edge: Edge) -> f32 {
-    match edge {
-        Edge::Closed => 1.0,
-        Edge::Unknown => 0.5,
-        Edge::Open => 0.0,
-    }
-}
-
-fn draw_maze<C: Visualize + Copy>(
-    maze: &Maze<C>,
-) -> Vec<((String, f64, f64), Vec<([f32; 4], [f64; 4])>)> {
-    let mut drawings = Vec::new();
-    for cell_x in 0..16 {
-        let x = cell_x as f64 * CELL_SIZE;
-        for cell_y in 0..16 {
-            let y = cell_y as f64 * CELL_SIZE;
-
-            let (cell, north_edge, south_edge, east_edge, west_edge) =
-                maze.get(cell_x, (maze2::HEIGHT - 1) - cell_y);
-
-            drawings.push((
-                (cell.text(), x + WALL_SIZE, y + CELL_SIZE - WALL_SIZE),
-                vec![
-                    (cell.color(), [x, y, CELL_SIZE, CELL_SIZE]),
-                    (
-                        [0.0, 0.0, 0.0, edge_to_opacity(south_edge)],
-                        [x, y + CELL_SIZE - WALL_SIZE, CELL_SIZE, WALL_SIZE],
-                    ),
-                    (
-                        [0.0, 0.0, 0.0, edge_to_opacity(east_edge)],
-                        [x + CELL_SIZE - WALL_SIZE, y, WALL_SIZE, CELL_SIZE],
-                    ),
-                    (
-                        [0.0, 0.0, 0.0, edge_to_opacity(north_edge)],
-                        [x, y, CELL_SIZE, WALL_SIZE],
-                    ),
-                    (
-                        [0.0, 0.0, 0.0, edge_to_opacity(west_edge)],
-                        [x, y, WALL_SIZE, CELL_SIZE],
-                    ),
-                ],
-            ));
+impl SimulatorState {
+    pub fn new() -> SimulatorState {
+        SimulatorState {
+            mouse_states: vec![MouseState::default()],
+            uart_buffer_len: 0,
         }
     }
-
-    drawings
 }
-*/
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct MouseState {
-    time: f64,
-    left: Option<f64>,
-    right: Option<f64>,
-    left_power: Option<f64>,
-    right_power: Option<f64>,
-    x: Option<f64>,
-    y: Option<f64>,
-    dir: Option<f64>,
+    time: f32,
+    battery: Option<f32>,
+    left_pos: Option<f32>,
+    right_pos: Option<f32>,
+    linear_pos: Option<f32>,
+    angular_pos: Option<f32>,
+    linear_set: Option<f32>,
+    angular_set: Option<f32>,
+    linear_power: Option<f32>,
+    angular_power: Option<f32>,
+    left_power: Option<f32>,
+    right_power: Option<f32>,
+}
+
+impl MouseState {
+    fn update(&mut self, msg: MouseMsg) {
+        match msg {
+            // Core
+            MouseMsg::Time(t) => self.time = t,
+            MouseMsg::Logged(m) => {},
+            MouseMsg::Provided(m) => {},
+
+            // Raw in/out
+            MouseMsg::LeftPos(p) => self.left_pos = Some(p),
+            MouseMsg::RightPos(p) => self.right_pos = Some(p),
+            MouseMsg::LeftPower(p) => self.left_power = Some(p),
+            MouseMsg::RightPower(p) => self.right_power = Some(p),
+            MouseMsg::Battery(v) => self.battery = Some(v),
+
+            // Calculated
+            MouseMsg::LinearPos(p) => self.linear_pos = Some(p),
+            MouseMsg::AngularPos(p) => self.angular_pos = Some(p),
+            MouseMsg::LinearSet(s) => self.linear_set = Some(s),
+            MouseMsg::AngularSet(s) => self.angular_pos = Some(s),
+            MouseMsg::AddLinear(v, d) => {},
+            MouseMsg::AddAngular(v, d) => {},
+
+            // Config
+            MouseMsg::LinearP(p) => {},
+            MouseMsg::LinearI(i) => {},
+            MouseMsg::LinearD(d) => {},
+            MouseMsg::LinearAcc(a) => {},
+            MouseMsg::AngularP(p) => {},
+            MouseMsg::AngularI(i) => {},
+            MouseMsg::AngularD(d) => {},
+            MouseMsg::AngularAcc(a) => {},
+        }
+
+    }
 }
 
 #[derive(Debug)]
 enum Msg {
-    Uart(u32, i32, i32),
+    Uart(uart::UartMsg),
     Gui(gui::GuiMsg),
 }
 
 fn main() {
     let config = CONFIG2019;
 
-    let states: Arc<Mutex<Vec<MouseState>>> = Arc::new(Mutex::new(Vec::new()));
+    let states: Arc<Mutex<SimulatorState>> = Arc::new(Mutex::new(SimulatorState::new()));
 
     let (tx, rx) = mpsc::channel();
 
@@ -171,83 +123,39 @@ fn main() {
         while let Ok(msg) = rx.recv() {
             let elapsed_time = last_msg_instant.elapsed();
             let mut state = state_update.lock().unwrap();
-            let mut next_state = if let Some(last_state) = state.last()
-            {
+            let mut next_state = if let Some(last_state) = state.mouse_states.last() {
                 last_state.clone()
             } else {
-                MouseState {
-                    time: 0.0,
-                    left: None,
-                    right: None,
-                    left_power: None,
-                    right_power: None,
-                    x: None,
-                    y: None,
-                    dir: None,
-                }
+                MouseState::default()
             };
 
             let last_time = next_state.time;
 
+            println!("{:?}", msg);
             match msg {
-                Msg::Uart(time, left, right) => {
-                    let time = time as f64 / 1000.0;
-                    let left = config.mouse.ticks_to_mm(left as f64);
-                    let right = config.mouse.ticks_to_mm(right as f64);
-
-
-                    let (dx, dy, ddir) =
-                        if let (Some(last_left), Some(last_right)) =
-                            (next_state.left, next_state.right)
-                        {
-                            let delta_left =
-                                left - next_state.left.unwrap_or(0.0);
-                            let delta_right =
-                                right - next_state.right.unwrap_or(0.0);
-
-                            let delta_linear = (delta_left + delta_right) / 2.0;
-                            let delta_angular = config
-                                .mouse
-                                .mm_to_rads((delta_left - delta_right) / 2.0);
-
-                            let mid_dir = next_state.dir.unwrap_or(0.0)
-                                + delta_angular / 2.0;
-
-                            (
-                                delta_linear * f64::cos(mid_dir),
-                                delta_linear * f64::sin(mid_dir),
-                                delta_angular,
-                            )
-                        } else {
-                            (0.0, 0.0, 0.0)
-                        };
-
-                    next_state.time = time;
-                    next_state.left = Some(left);
-                    next_state.right = Some(right);
-                    next_state.x = Some(next_state.x.unwrap_or(0.0) + dx);
-                    next_state.y = Some(next_state.y.unwrap_or(0.0) + dy);
-                    next_state.dir = Some(next_state.dir.unwrap_or(0.0) + ddir);
-
-                }
+                Msg::Uart(uartmsg) => {
+                    match uartmsg {
+                        uart::UartMsg::Mouse(mousemsg, buf_len) => {
+                            next_state.update(mousemsg);
+                            state.uart_buffer_len = buf_len;
+                        }
+                    }
+                },
 
                 Msg::Gui(guimsg) => {
-                    println!("GuiMsg: {:?}", guimsg);
-
                     match guimsg {
-                        gui::GuiMsg::LeftMotorPower(p) => next_state.left_power = Some(p),
-                        gui::GuiMsg::RightMotorPower(p) => next_state.right_power = Some(p),
+                        gui::GuiMsg::Mouse(mousemsg) => {
+                            uart_tx.send(mousemsg);
+                        }
                     }
-
-                    uart_tx.send(guimsg);
                 }
             }
 
             if last_time == next_state.time {
-                next_state.time += elapsed_time.as_secs() as f64 + elapsed_time.subsec_nanos() as f64 / 10e9;
+                //next_state.time += elapsed_time.as_secs() as f32 + elapsed_time.subsec_nanos() as f32 / 10e9;
             }
 
-            state.push(next_state);
+            state.mouse_states.push(next_state);
             last_msg_instant += elapsed_time;
         }
     });

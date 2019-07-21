@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
@@ -35,16 +36,21 @@ use imgui_glium_renderer::GliumRenderer;
 use imgui_winit_support::HiDpiMode;
 use imgui_winit_support::WinitPlatform;
 
+use arrayvec::ArrayVec;
+
+use micromouse_lib::msgs::Msg as MouseMsg;
+use micromouse_lib::msgs::MsgId as MouseMsgId;
+
+use crate::SimulatorState;
 use crate::MouseState;
 
 #[derive(Debug)]
 pub enum GuiMsg {
-    LeftMotorPower(f64),
-    RightMotorPower(f64),
+    Mouse(MouseMsg)
 }
 
 struct Plot {
-    pub function: fn(&MouseState) -> Option<f64>,
+    pub function: fn(&MouseState) -> Option<f32>,
     pub showing: bool,
     pub range: [f32; 2],
 }
@@ -62,6 +68,7 @@ struct State {
     pub history_time: f32,
     pub history_active: bool,
     pub editables: HashMap<String, f32>,
+    pub logged: HashSet<MouseMsgId>,
 }
 
 impl State {
@@ -72,6 +79,7 @@ impl State {
             history_time: 0.0,
             history_active: false,
             editables: HashMap::new(),
+            logged: HashSet::new(),
         }
     }
 }
@@ -83,53 +91,15 @@ struct Gui<Msg: 'static + Send> {
 }
 
 impl<Msg: 'static + Send> Gui<Msg> {
-    fn view_readonly_float(
+
+    fn view_float(
         &mut self,
         ui: &mut Ui,
         mouse_state: &MouseState,
         label: &ImStr,
-        value: fn(&MouseState) -> Option<f64>,
-    ) {
-        ui.push_id(label);
-        let popup_id = ImString::new(format!("Popup_{}", label));
-
-        ui.columns(2, im_str!("state"), false);
-        ui.text(&format!("{}: ", label));
-        ui.same_line(0.0);
-        if let Some(value) = value(mouse_state) {
-            ui.text(&format!("{}", value));
-        } else {
-            ui.text("Unknown");
-        }
-
-        ui.next_column();
-
-        let key: &str = label.as_ref();
-        if let Some(mut plot) = self.state.plots.get_mut(key) {
-            ui.checkbox(im_str!("plot"), &mut plot.showing);
-        } else {
-            self.state.plots.insert(
-                key.to_string(),
-                Plot {
-                    function: value,
-                    showing: false,
-                    range: [200.0, 0.0]
-                },
-            );
-        }
-
-        ui.next_column();
-
-        ui.pop_id();
-    }
-
-    fn view_editable_float(
-        &mut self,
-        ui: &mut Ui,
-        mouse_state: &MouseState,
-        label: &ImStr,
-        value: fn(&MouseState) -> Option<f64>,
-        on_edit: fn(f64) -> GuiMsg
+        value: fn(&MouseState) -> Option<f32>,
+        on_edit: Option<fn(f32) -> MouseMsg>,
+        id: MouseMsgId,
     ) {
         ui.push_id(label);
         let popup_id = ImString::new(format!("Popup_{}", label));
@@ -161,23 +131,37 @@ impl<Msg: 'static + Send> Gui<Msg> {
 
         ui.same_line(0.0);
 
-        if let Some(mut editable) = self.state.editables.get_mut(key) {
-            {
-                let _w = ui.push_item_width(-40.0);
-                ui.input_float(im_str!(""), editable).build();
-            }
+        let mut log = self.state.logged.remove(&id);
+        let update_log = ui.checkbox(im_str!("log"), &mut log);
+        if log {
+            self.state.logged.insert(id);
+        }
+        if update_log {
+            let log_msg_ids: ArrayVec<[MouseMsgId; 8]> = self.state.logged.iter().cloned().collect();
+            self.tx.send((self.on_gui_msg)(GuiMsg::Mouse(MouseMsg::Logged(log_msg_ids))));
+        }
+
+        if let Some(on_edit) = on_edit {
             ui.same_line(0.0);
-            {
-                let _w = ui.push_item_width(-1.0);
-                if ui.small_button(im_str!("Set")) {
-                    self.tx.send((self.on_gui_msg)(on_edit(*editable as f64)));
+
+            if let Some(mut editable) = self.state.editables.get_mut(key) {
+                {
+                    let _w = ui.push_item_width(-40.0);
+                    ui.input_float(im_str!(""), editable).build();
                 }
+                ui.same_line(0.0);
+                {
+                    let _w = ui.push_item_width(-1.0);
+                    if ui.small_button(im_str!("Set")) {
+                        self.tx.send((self.on_gui_msg)(GuiMsg::Mouse(on_edit(*editable as f32))));
+                    }
+                }
+            } else {
+                self.state.editables.insert(
+                    key.to_string(),
+                    value(mouse_state).unwrap_or(0.0) as f32,
+                );
             }
-        } else {
-            self.state.editables.insert(
-                key.to_string(),
-                value(mouse_state).unwrap_or(0.0) as f32,
-            );
         }
 
         ui.next_column();
@@ -187,64 +171,59 @@ impl<Msg: 'static + Send> Gui<Msg> {
 
     fn view_state(&mut self, ui: &mut Ui, mouse_state: &MouseState) {
 
-        ui.columns(1, im_str!("headers"), false);
-        ui.separator();
-        ui.text("Editable");
-        ui.next_column();
+        self.view_float(
+            ui,
+            mouse_state,
+            im_str!("Time"),
+            |m| Some(m.time),
+            None,
+            MouseMsgId::Time,
+        );
 
-        self.view_editable_float(
+        self.view_float(
             ui,
             mouse_state,
             im_str!("Left motor power"),
             |m| m.left_power,
-            GuiMsg::LeftMotorPower,
+            Some(MouseMsg::LeftPower),
+            MouseMsgId::LeftPower,
         );
 
-        ui.columns(1, im_str!("headers"), false);
-        ui.separator();
-        ui.text("Raw from the Mouse");
-        ui.next_column();
+        self.view_float(
+            ui,
+            mouse_state,
+            im_str!("Right motor power"),
+            |m| m.right_power,
+            Some(MouseMsg::RightPower),
+            MouseMsgId::RightPower,
+        );
 
-        self.view_readonly_float(ui, mouse_state, im_str!("Time"), |m| {
-            Some(m.time)
-        });
-        self.view_readonly_float(
+        self.view_float(
             ui,
             mouse_state,
             im_str!("Left Encoder"),
-            |m| m.left,
+            |m| m.left_pos,
+            None,
+            MouseMsgId::LeftPos,
         );
-        self.view_readonly_float(
+        self.view_float(
             ui,
             mouse_state,
             im_str!("Right Encoder"),
-            |m| m.right,
+            |m| m.right_pos,
+            None,
+            MouseMsgId::RightPos,
         );
-
-        ui.columns(1, im_str!("headers"), false);
-        ui.separator();
-        ui.text("Calculated from raw");
-        ui.next_column();
-
-        self.view_readonly_float(ui, mouse_state, im_str!("X Position"), |m| {
-            m.x
-        });
-        self.view_readonly_float(ui, mouse_state, im_str!("Y Position"), |m| {
-            m.y
-        });
-        self.view_readonly_float(ui, mouse_state, im_str!("Direction"), |m| {
-            m.dir
-        });
     }
 
-    fn run_ui(&mut self, ui: &mut Ui, mouse_states: &[MouseState]) {
+    fn run_ui(&mut self, ui: &mut Ui, simulator_state: &SimulatorState) {
         let mouse_state: Vec<&MouseState> = if self.state.history_active {
-            mouse_states
+            simulator_state.mouse_states
                 .iter()
                 .filter(|m| (m.time as f32) < self.state.history_time)
                 .collect()
         } else {
-            mouse_states.iter().collect()
+            simulator_state.mouse_states.iter().collect()
         };
 
         ui.window(im_str!("Debug"))
@@ -317,11 +296,17 @@ impl<Msg: 'static + Send> Gui<Msg> {
                     }
                 });
         }
+
+        ui.window(im_str!("Simulator"))
+            .size([400.0, 300.0], Condition::FirstUseEver)
+            .build(|| {
+                ui.label_text(im_str!("Uart buffer"), ImString::new(simulator_state.uart_buffer_len.to_string()).as_ref());
+            });
     }
 }
 
 pub fn start<Msg: 'static + Send>(
-    mouse_state: Arc<Mutex<Vec<MouseState>>>,
+    simulator_state: Arc<Mutex<SimulatorState>>,
     tx: Sender<Msg>,
     on_gui_msg: fn(GuiMsg) -> Msg,
 ) -> thread::JoinHandle<()> {
@@ -394,8 +379,8 @@ pub fn start<Msg: 'static + Send>(
             last_frame = io.update_delta_time(last_frame);
             let mut ui = imgui.frame();
 
-            let mouse_states = mouse_state.lock().unwrap();
-            gui.run_ui(&mut ui, &mouse_states);
+            let simulator_state = simulator_state.lock().unwrap();
+            gui.run_ui(&mut ui, &simulator_state);
 
             let mut target = display.draw();
             target.clear_color_srgb(1.0, 1.0, 1.0, 1.0);

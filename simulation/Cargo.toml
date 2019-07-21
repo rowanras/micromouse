@@ -14,3 +14,4 @@ image = "0.21.0"
 rand = "0.7.0"
 serialport = "3.3.0"
 micromouse_lib = { path = "../micromouse_lib" }
+arrayvec = "0.4.11"
