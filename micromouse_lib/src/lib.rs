@@ -2,10 +2,9 @@
 
 pub mod control;
 pub mod msgs;
+//pub mod mouse;
 
 use core::f32;
-
-use pid_control::DerivativeMode;
 
 pub const CONFIG2019: Config = Config {
     mouse: Mouse {
@@ -22,7 +21,13 @@ pub const CONFIG2019: Config = Config {
         p: 1.0,
         i: 0.0,
         d: 0.0,
-        d_mode: DerivativeMode::OnError,
+        acc: 1.0,
+    },
+
+    angular_motion: MotionControl {
+        p: 1.0,
+        i: 0.0,
+        d: 0.0,
         acc: 1.0,
     },
 };
@@ -32,7 +37,6 @@ pub struct MotionControl {
     p: f32,
     i: f32,
     d: f32,
-    d_mode: DerivativeMode,
     acc: f32,
 }
 
@@ -90,4 +94,5 @@ impl Mouse {
 pub struct Config {
     pub mouse: Mouse,
     pub linear_motion: MotionControl,
+    pub angular_motion: MotionControl,
 }
