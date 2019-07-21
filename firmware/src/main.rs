@@ -211,16 +211,25 @@ fn main() -> ! {
         orange_led.toggle();
     }
 
+    let mut last_msg_time = 0;
     let mut logged = ArrayVec::new();
     let mut provided = ArrayVec::new();
     let mut last_control_time = 0.0;
-    let mut linear_control = MotionControl::new(1.0, 0.0, 0.0, 1.0);
-    let mut angular_control = MotionControl::new(1.0, 0.0, 0.0, 1.0);
+    //let mut linear_control = MotionControl::new(1.0, 0.0, 0.0, 1.0);
+    //let mut angular_control = MotionControl::new(1.0, 0.0, 0.0, 1.0);
 
     loop {
         let now: u32 = time.now();
 
         let msg = Msg::parse_bytes(&mut uart);
+
+        if msg.is_ok() {
+            last_msg_time = now;
+        } else if now - last_msg_time >= 1000 {
+            uart.clear_rx().ignore();
+            red_led.set_low();
+            last_msg_time = now;
+        }
 
         match msg {
             // Core
@@ -233,6 +242,7 @@ fn main() -> ! {
             Ok(Msg::RightPos(p)) => {},
             Ok(Msg::LeftPower(p)) => left_motor.change_power((p * 10000.0) as i32),
             Ok(Msg::RightPower(p)) => right_motor.change_power((p * 10000.0) as i32),
+            Ok(Msg::Battery(v)) => {},
 
             // Calculated
             Ok(Msg::LinearPos(p)) => {},
@@ -251,7 +261,7 @@ fn main() -> ! {
             Ok(Msg::AngularI(i)) => {},
             Ok(Msg::AngularD(d)) => {},
             Ok(Msg::AngularAcc(a)) => {},
-            Err(ParseError::UnknownMsg(_)) => orange_led.set_high(),
+            Err(ParseError::UnknownMsg(_)) => red_led.set_high(),
             Err(_) => {},
         }
 
@@ -300,6 +310,7 @@ fn main() -> ! {
                     MsgId::RightPos => Msg::RightPos(config.mouse.ticks_to_mm(right_encoder.count() as f32)),
                     MsgId::LeftPower => Msg::LeftPower(0.0),
                     MsgId::RightPower => Msg::RightPower(0.0),
+                    MsgId::Battery => Msg::Battery(battery.raw() as f32),
 
                     // Calculated
                     MsgId::LinearPos => Msg::LinearPos(0.0),
@@ -324,26 +335,7 @@ fn main() -> ! {
             }
         }
 
-        /*
-        if report && uart.tx_len() == Ok(0) {
-            let left_count = left_encoder.count();
-            let right_count = right_encoder.count();
-            let buffer = [
-                0xff,
-                (now & 0xff) as u8,
-                ((now >> 8) & 0xff) as u8,
-                ((now >> 16) & 0xff) as u8,
-                (left_count  & 0xff) as u8,
-                ((left_count >> 8) & 0xff) as u8,
-                (right_count  & 0xff) as u8,
-                ((right_count >> 8) & 0xff) as u8,
-            ];
-
-            uart.add_bytes(&buffer).ignore();
-        }
-
         battery.update(now);
-        */
     }
 }
 
