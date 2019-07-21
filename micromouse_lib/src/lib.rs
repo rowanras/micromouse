@@ -2,7 +2,7 @@
 
 pub mod control;
 pub mod msgs;
-//pub mod mouse;
+pub mod mouse;
 
 use core::f32;
 

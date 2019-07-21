@@ -4,6 +4,7 @@ use arrayvec::ArrayVec;
 use crate::Config;
 use crate::Mouse as MouseConfig;
 use crate::control::MotionControl;
+use crate::control::Target;
 use crate::msgs::Msg;
 use crate::msgs::MsgId;
 
@@ -14,6 +15,8 @@ pub struct Mouse {
     provided: ArrayVec<[MsgId; 8]>,
 
     time: f32,
+
+    battery: f32,
 
     left_encoder_pos: f32,
     right_encoder_pos: f32,
@@ -35,6 +38,8 @@ impl Mouse {
     pub fn new(config: Config) -> Mouse {
         Mouse {
             mouse_config: config.mouse,
+
+            battery: 0.0,
 
             logged: ArrayVec::new(),
             provided: ArrayVec::new(),
@@ -70,24 +75,35 @@ impl Mouse {
             Msg::RightPos(p) => self.right_encoder_pos = p,
             Msg::LeftPower(p) => self.left_motor_power = p,
             Msg::RightPower(p) => self.right_motor_power = p,
+            Msg::Battery(v) => self.battery = v,
 
             // Calculated
             Msg::LinearPos(p) => self.linear_position = p,
             Msg::AngularPos(p) => self.angular_position = p,
-            Msg::LinearSet(s) => self.linear_
-            Msg::AngularSet(s) => {},
-            Msg::AddLinear(v, d) => {},
-            Msg::AddAngular(v, d) => {},
+            Msg::LinearSet(s) => self.linear_control.set_position(s as f64),
+            Msg::AngularSet(s) => self.linear_control.set_position(s as f64),
+            Msg::AddLinear(v, d) => {
+                self.linear_control.queue_target(Target {
+                    velocity: v as f64,
+                    distance: d as f64
+                });
+            },
+            Msg::AddAngular(v, d) => {
+                self.angular_control.queue_target( Target {
+                    velocity: v as f64,
+                    distance: d as f64,
+                });
+            },
 
             // Config
-            Msg::LinearP(p) => {},
-            Msg::LinearI(i) => {},
-            Msg::LinearD(d) => {},
-            Msg::LinearAcc(a) => {},
-            Msg::AngularP(p) => {},
-            Msg::AngularI(i) => {},
-            Msg::AngularD(d) => {},
-            Msg::AngularAcc(a) => {},
+            Msg::LinearP(p) => self.linear_control.set_p(p as f64),
+            Msg::LinearI(i) => self.linear_control.set_i(i as f64),
+            Msg::LinearD(d) => self.linear_control.set_d(d as f64),
+            Msg::LinearAcc(a) => self.linear_control.set_acc(a as f64),
+            Msg::AngularP(p) => self.angular_control.set_p(p as f64),
+            Msg::AngularI(i) => self.angular_control.set_i(i as f64),
+            Msg::AngularD(d) => self.angular_control.set_d(d as f64),
+            Msg::AngularAcc(a) => self.angular_control.set_acc(a as f64),
         }
     }
 }

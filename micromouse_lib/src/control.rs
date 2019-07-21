@@ -79,4 +79,24 @@ impl MotionControl {
     pub fn position(&self) -> f64 {
         self.position
     }
+
+    pub fn set_position(&mut self, position: f64) {
+        self.position = position;
+    }
+
+    pub fn set_p(&mut self, p: f64) {
+        self.pid.p_gain = p;
+    }
+
+    pub fn set_i(&mut self, i: f64) {
+        self.pid.i_gain = i;
+    }
+
+    pub fn set_d(&mut self, d: f64) {
+        self.pid.d_gain = d;
+    }
+
+    pub fn set_acc(&mut self, acc: f64) {
+        self.acceleration = acc;
+    }
 }
