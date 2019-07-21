@@ -4,6 +4,8 @@ use pid_control::PIDController;
 
 use arrayvec::ArrayVec;
 
+use crate::MotionControl as MotionControlConfig;
+
 const TARGET_BUFFER_SIZE: usize = 64;
 
 #[derive(Copy, Clone, Debug)]
@@ -24,8 +26,8 @@ pub struct MotionControl {
 }
 
 impl MotionControl {
-    pub fn new(p: f64, i: f64, d: f64, acc: f64) -> MotionControl {
-        let mut pid = PIDController::new(p, i, d);
+    pub fn new(config: MotionControlConfig) -> MotionControl {
+        let mut pid = PIDController::new(config.p as f64, config.i as f64, config.d as f64);
         pid.d_mode = DerivativeMode::OnMeasurement;
 
         MotionControl {
@@ -35,7 +37,7 @@ impl MotionControl {
             position: 0.0,
             start_postition: 0.0,
             velocity: 0.0,
-            acceleration: acc,
+            acceleration: config.acc as f64,
             last_time: 0.0,
         }
     }

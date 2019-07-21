@@ -1,3 +1,4 @@
+
 use core::convert::From;
 use core::f32;
 use core::u32;
@@ -18,7 +19,7 @@ pub trait WriteExact {
     fn write(&mut self, buf: &[u8]) -> Result<(), Self::Error>;
 }
 
-#[derive(FromPrimitive, Copy, Clone)]
+#[derive(FromPrimitive, Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum MsgId {
     // Core
     Time = 0x00,
@@ -30,6 +31,7 @@ pub enum MsgId {
     RightPos = 0x11,
     LeftPower = 0x12,
     RightPower = 0x13,
+    Battery = 0x14,
 
     // Calculated
     LinearPos = 0x20,
@@ -50,6 +52,7 @@ pub enum MsgId {
     AngularAcc = 0xa7,
 }
 
+#[derive(Debug)]
 pub enum Msg {
     // Core
     Time(f32),
@@ -61,6 +64,7 @@ pub enum Msg {
     RightPos(f32),
     LeftPower(f32),
     RightPower(f32),
+    Battery(f32),
 
     // Calculated
     LinearPos(f32),
@@ -200,6 +204,7 @@ impl Msg {
             Some(MsgId::RightPos) => parse_f32(buf, Msg::RightPos),
             Some(MsgId::LeftPower) => parse_f32(buf, Msg::LeftPower),
             Some(MsgId::RightPower) => parse_f32(buf, Msg::RightPower),
+            Some(MsgId::Battery) => parse_f32(buf, Msg::Battery),
 
             Some(MsgId::LinearPos) => parse_f32(buf, Msg::LinearPos),
             Some(MsgId::AngularPos) => parse_f32(buf, Msg::AngularPos),
@@ -235,6 +240,7 @@ impl Msg {
             &Msg::RightPos(m) => write_f32(buf, MsgId::RightPos, m),
             &Msg::LeftPower(m) => write_f32(buf, MsgId::LeftPower, m),
             &Msg::RightPower(m) => write_f32(buf, MsgId::RightPower, m),
+            &Msg::Battery(m) => write_f32(buf, MsgId::Battery, m),
 
             &Msg::LinearPos(m) => write_f32(buf, MsgId::LinearPos, m),
             &Msg::AngularPos(m) => write_f32(buf, MsgId::AngularPos, m),
