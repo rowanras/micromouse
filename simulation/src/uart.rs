@@ -5,23 +5,23 @@ use std::time::Duration;
 use std::io::Read;
 
 use std::sync::mpsc;
-use std::sync::mpsc::Sender;
 use std::sync::mpsc::Receiver;
+use std::sync::mpsc::Sender;
 use std::thread;
 
-use serialport::SerialPort;
+use serialport::ClearBuffer;
 use serialport::DataBits;
 use serialport::FlowControl;
 use serialport::Parity;
+use serialport::SerialPort;
 use serialport::SerialPortSettings;
 use serialport::StopBits;
-use serialport::ClearBuffer;
 
+use crate::gui;
 use micromouse_lib::msgs::Msg as MouseMsg;
 use micromouse_lib::msgs::MsgId as MouseMsgId;
 use micromouse_lib::msgs::ReadExact;
 use micromouse_lib::msgs::WriteExact;
-use crate::gui;
 
 pub struct Uart {
     serialport: Box<dyn SerialPort>,
@@ -68,7 +68,7 @@ impl Uart {
 
         Ok(Uart {
             serialport,
-            buf: Vec::new()
+            buf: Vec::new(),
         })
     }
 
@@ -143,10 +143,7 @@ pub enum UartMsg {
     Mouse(MouseMsg, usize),
 }
 
-pub fn start<Msg: 'static + Send>(
-    tx: Sender<Msg>,
-    msg: fn(UartMsg) -> Msg,
-) -> Sender<MouseMsg> {
+pub fn start<Msg: 'static + Send>(tx: Sender<Msg>, msg: fn(UartMsg) -> Msg) -> Sender<MouseMsg> {
     let (uart_tx, rx): (Sender<MouseMsg>, Receiver<MouseMsg>) = mpsc::channel();
 
     thread::spawn(move || {

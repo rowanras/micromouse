@@ -24,12 +24,12 @@
 extern crate panic_halt;
 
 pub mod battery;
-pub mod bot;
-pub mod config;
-pub mod control;
+//pub mod bot;
+//pub mod config;
+//pub mod control;
 pub mod motors;
-pub mod navigate;
-pub mod plan;
+//pub mod navigate;
+//pub mod plan;
 pub mod time;
 pub mod uart;
 pub mod vl6180x;
@@ -41,13 +41,10 @@ use stm32f4xx_hal::stm32 as stm32f405;
 
 use ignore_result::Ignore;
 
-use arrayvec::ArrayVec;
-
 use micromouse_lib::CONFIG2019;
 use micromouse_lib::msgs::Msg;
-use micromouse_lib::msgs::MsgId;
 use micromouse_lib::msgs::ParseError;
-use micromouse_lib::control::MotionControl;
+use micromouse_lib::mouse::Mouse;
 
 use crate::battery::Battery;
 use crate::time::Time;
@@ -104,9 +101,9 @@ fn main() -> ! {
     let mut blue_led = gpiob.pb14.into_push_pull_output();
     let mut orange_led = gpiob.pb15.into_push_pull_output();
 
-    let left_button = gpioc.pc10.into_pull_up_input();
-    let middle_button = gpioc.pc11.into_pull_up_input();
-    let right_button = gpioc.pc12.into_pull_up_input();
+    let _left_button = gpioc.pc10.into_pull_up_input();
+    let _middle_button = gpioc.pc11.into_pull_up_input();
+    let _right_button = gpioc.pc12.into_pull_up_input();
 
     orange_led.set_high();
     blue_led.set_low();
@@ -211,131 +208,74 @@ fn main() -> ! {
         orange_led.toggle();
     }
 
-    let mut last_msg_time = 0;
-    let mut logged = ArrayVec::new();
-    let mut provided = ArrayVec::new();
-    let mut last_control_time = 0.0;
-    //let mut linear_control = MotionControl::new(1.0, 0.0, 0.0, 1.0);
-    //let mut angular_control = MotionControl::new(1.0, 0.0, 0.0, 1.0);
+    let mut mouse = Mouse::new(config);
+
+    let mut last_msg_time = 0.0;
+
+    let mut last_time = 0;
 
     loop {
-        let now: u32 = time.now();
 
-        let msg = Msg::parse_bytes(&mut uart);
+        let now = time.now();
 
-        if msg.is_ok() {
-            last_msg_time = now;
-        } else if now - last_msg_time >= 1000 {
-            uart.clear_rx().ignore();
-            red_led.set_low();
-            last_msg_time = now;
-        }
+        if now - last_time >= 10 {
+            battery.update(now);
 
-        match msg {
-            // Core
-            Ok(Msg::Time(t)) => {},
-            Ok(Msg::Logged(m)) => logged = m,
-            Ok(Msg::Provided(m)) => provided = m,
+            mouse.time = now as f32 / 1000.0;
+            mouse.battery = battery.raw() as f32;
+            mouse.left_pos = mouse.mouse_config.ticks_to_mm(left_encoder.count() as f32);
+            mouse.right_pos = mouse.mouse_config.ticks_to_mm(right_encoder.count() as f32);
 
-            // Raw in/out
-            Ok(Msg::LeftPos(p)) => {},
-            Ok(Msg::RightPos(p)) => {},
-            Ok(Msg::LeftPower(p)) => left_motor.change_power((p * 10000.0) as i32),
-            Ok(Msg::RightPower(p)) => right_motor.change_power((p * 10000.0) as i32),
-            Ok(Msg::Battery(v)) => {},
+            let msg = Msg::parse_bytes(&mut uart);
 
-            // Calculated
-            Ok(Msg::LinearPos(p)) => {},
-            Ok(Msg::AngularPos(p)) => {},
-            Ok(Msg::LinearSet(s)) => {},
-            Ok(Msg::AngularSet(s)) => {},
-            Ok(Msg::AddLinear(v, d)) => {},
-            Ok(Msg::AddAngular(v, d)) => {},
-
-            // Config
-            Ok(Msg::LinearP(p)) => {},
-            Ok(Msg::LinearI(i)) => {},
-            Ok(Msg::LinearD(d)) => {},
-            Ok(Msg::LinearAcc(a)) => {},
-            Ok(Msg::AngularP(p)) => {},
-            Ok(Msg::AngularI(i)) => {},
-            Ok(Msg::AngularD(d)) => {},
-            Ok(Msg::AngularAcc(a)) => {},
-            Err(ParseError::UnknownMsg(_)) => red_led.set_high(),
-            Err(_) => {},
-        }
-
-        if uart.tx_len() == Ok(0) {
-            orange_led.set_low();
-        } else {
-            orange_led.set_high();
-        }
-
-        if uart.rx_len() == Ok(0) {
-            blue_led.set_low();
-        } else {
-            blue_led.set_high();
-        }
-
-        if logged.len() > 0 {
-            green_led.set_high();
-        } else {
-            green_led.set_low();
-        }
-
-        /*
-        let now = now as f64 / 1000.0;
-        if now - last_control_time > 0.01 {
-            let linear_position = config.mouse.ticks_to_mm((left_encoder.count() + right_encoder.count()) as f64 / 2.0);
-            let angular_position = config.mouse.ticks_to_rads((left_encoder.count() - right_encoder.count()) as f64 / 2.0);
-
-            let linear_power = linear_control.update(now, linear_position);
-            let angular_power = angular_control.update(now, angular_position);
-
-            left_motor.change_power(((linear_power + angular_power) * 10000.0) as i32);
-            right_motor.change_power((( linear_power - angular_power) * 10000.0) as i32);
-        }
-        */
-
-        if uart.tx_len() == Ok(0) {
-            for log in logged.iter() {
-                let msg = match log {
-                    // Core
-                    MsgId::Time => Msg::Time(now as f32 / 1000.0),
-                    MsgId::Logged => Msg::Logged(logged.clone()),
-                    MsgId::Provided => Msg::Provided(provided.clone()),
-
-                    // Raw in/out
-                    MsgId::LeftPos => Msg::LeftPos(config.mouse.ticks_to_mm(left_encoder.count() as f32)),
-                    MsgId::RightPos => Msg::RightPos(config.mouse.ticks_to_mm(right_encoder.count() as f32)),
-                    MsgId::LeftPower => Msg::LeftPower(0.0),
-                    MsgId::RightPower => Msg::RightPower(0.0),
-                    MsgId::Battery => Msg::Battery(battery.raw() as f32),
-
-                    // Calculated
-                    MsgId::LinearPos => Msg::LinearPos(0.0),
-                    MsgId::AngularPos => Msg::AngularPos(0.0),
-                    MsgId::LinearSet => Msg::LinearSet(0.0),
-                    MsgId::AngularSet => Msg::AngularSet(0.0),
-                    MsgId::AddLinear => Msg::AddLinear(0.0, 0.0),
-                    MsgId::AddAngular => Msg::AddAngular(0.0, 0.0),
-
-                    // Config
-                    MsgId::LinearP => Msg::LinearP(0.0),
-                    MsgId::LinearI => Msg::LinearI(0.0),
-                    MsgId::LinearD => Msg::LinearD(0.0),
-                    MsgId::LinearAcc => Msg::LinearAcc(0.0),
-                    MsgId::AngularP => Msg::AngularP(0.0),
-                    MsgId::AngularI => Msg::AngularI(0.0),
-                    MsgId::AngularD => Msg::AngularD(0.0),
-                    MsgId::AngularAcc => Msg::AngularAcc(0.0),
-                };
-
-                msg.generate_bytes(&mut uart).ignore();
+            if let Ok(msg) = msg {
+                last_msg_time = mouse.time;
+                mouse.update(msg);
+            } else if mouse.time - last_msg_time >= 1.0{
+                uart.clear_rx().ignore();
+                red_led.set_low();
+                last_msg_time = mouse.time;
+                if let Err(ParseError::UnknownMsg(_)) = msg {
+                    red_led.set_high();
+                }
             }
-        }
 
-        battery.update(now);
+            if uart.tx_len() == Ok(0) {
+                orange_led.set_low();
+            } else {
+                orange_led.set_high();
+            }
+
+            if uart.rx_len() == Ok(0) {
+                blue_led.set_low();
+            } else {
+                blue_led.set_high();
+            }
+
+            if mouse.logged.len() > 0 {
+                green_led.set_high();
+            } else {
+                green_led.set_low();
+            }
+
+            mouse.linear_pos = (mouse.left_pos + mouse.right_pos) / 2.0;
+            mouse.angular_pos = mouse.mouse_config.mm_to_rads((mouse.left_pos - mouse.right_pos) / 2.0);
+
+            mouse.left_power = mouse.linear_power + mouse.angular_power;
+            mouse.right_power = mouse.linear_power - mouse.angular_power;
+
+            left_motor.change_power((mouse.left_power * 10000.0) as i32);
+            right_motor.change_power((mouse.right_power * 10000.0) as i32);
+
+            if uart.tx_len() == Ok(0) {
+                for &log in mouse.logged.iter() {
+                    let msg = mouse.msg(log);
+                    msg.generate_bytes(&mut uart).ignore();
+                }
+            }
+
+            last_time = now;
+        }
     }
 }
 

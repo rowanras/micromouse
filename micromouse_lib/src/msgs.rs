@@ -1,4 +1,3 @@
-
 use core::convert::From;
 use core::f32;
 use core::u32;
@@ -7,6 +6,8 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
 use arrayvec::ArrayVec;
+
+use crate::mouse::MAX_MSGS;
 
 pub trait ReadExact {
     type Error;
@@ -36,10 +37,12 @@ pub enum MsgId {
     // Calculated
     LinearPos = 0x20,
     AngularPos = 0x21,
-    LinearSet = 0x22,
-    AngularSet = 0x23,
-    AddLinear = 0x24,
-    AddAngular = 0x25,
+    LinearPower = 0x22,
+    AngularPower = 0x23,
+    LinearSet = 0x24,
+    AngularSet = 0x25,
+    AddLinear = 0x26,
+    AddAngular = 0x27,
 
     // Config
     LinearP = 0xa0,
@@ -56,8 +59,8 @@ pub enum MsgId {
 pub enum Msg {
     // Core
     Time(f32),
-    Logged(ArrayVec<[MsgId; 8]>),
-    Provided(ArrayVec<[MsgId; 8]>),
+    Logged(ArrayVec<[MsgId; MAX_MSGS]>),
+    Provided(ArrayVec<[MsgId; MAX_MSGS]>),
 
     // Raw in/out
     LeftPos(f32),
@@ -69,6 +72,8 @@ pub enum Msg {
     // Calculated
     LinearPos(f32),
     AngularPos(f32),
+    LinearPower(f32),
+    AngularPower(f32),
     LinearSet(f32),
     AngularSet(f32),
     AddLinear(f32, f32),
@@ -106,6 +111,16 @@ fn parse_id<R: ReadExact<Error = E>, E>(
     Ok(msg)
 }
 
+fn parse_u32<R: ReadExact<Error = E>, E>(
+    buf: &mut R,
+    msg: fn(u32) -> Msg,
+) -> Result<Msg, ParseError<E>> {
+    let mut msgbuf = [0; 5];
+    buf.take(&mut msgbuf)?;
+    let [_, a1, a2, a3, a4] = msgbuf;
+    Ok(msg(u32::from_le_bytes([a1, a2, a3, a4])))
+}
+
 fn parse_f32<R: ReadExact<Error = E>, E>(
     buf: &mut R,
     msg: fn(f32) -> Msg,
@@ -131,17 +146,21 @@ fn parse_2f32<R: ReadExact<Error = E>, E>(
 
 fn parse_msgids<R: ReadExact<Error = E>, E>(
     buf: &mut R,
-    msg: fn(ArrayVec<[MsgId; 8]>) -> Msg,
+    msg: fn(ArrayVec<[MsgId; MAX_MSGS]>) -> Msg,
 ) -> Result<Msg, ParseError<E>> {
     // attept to get the length
     let mut lenbuf = [0; 2];
     buf.peek(&mut lenbuf)?;
     let [_id, len] = lenbuf;
 
-    let msgbuf = &mut [0; 10][0..(len+2) as usize];
+    let msgbuf = &mut [0; 10][0..(len + 2) as usize];
     buf.take(msgbuf)?;
 
-    let msgids: ArrayVec<[MsgId; 8]> = msgbuf.into_iter().skip(2).filter_map(|&mut m| MsgId::from_u8(m)).collect();
+    let msgids: ArrayVec<[MsgId; MAX_MSGS]> = msgbuf
+        .into_iter()
+        .skip(2)
+        .filter_map(|&mut m| MsgId::from_u8(m))
+        .collect();
 
     Ok(msg(msgids))
 }
@@ -152,6 +171,15 @@ fn write_id<W: WriteExact<Error = E>, E>(
     msgid: MsgId,
 ) -> Result<(), E> {
     buf.write(&[msgid as u8])
+}
+
+fn write_u32<W: WriteExact<Error = E>, E>(
+    buf: &mut W,
+    msgid: MsgId,
+    msg: u32,
+) -> Result<(), E> {
+    let [a1, a2, a3, a4] = u32::to_le_bytes(msg);
+    buf.write(&[msgid as u8, a1, a2, a3, a4])
 }
 
 fn write_f32<W: WriteExact<Error = E>, E>(
@@ -179,10 +207,10 @@ fn write_msgids<W: WriteExact<Error = E>, E>(
     msgid: MsgId,
     msgids: &[MsgId],
 ) -> Result<(), E> {
-    let bytes: ArrayVec<[u8; 9]> = [msgid as u8]
+    let bytes: ArrayVec<[u8; MAX_MSGS+1]> = [msgid as u8]
         .into_iter()
         .map(|&m| m)
-        .chain([msgids.len() as u8].into_iter().map(|&l| l))
+        .chain([MAX_MSGS.min(msgids.len()) as u8].into_iter().map(|&l| l))
         .chain(msgids.into_iter().map(|&m| m as u8))
         .collect();
     buf.write(&bytes)
@@ -208,6 +236,8 @@ impl Msg {
 
             Some(MsgId::LinearPos) => parse_f32(buf, Msg::LinearPos),
             Some(MsgId::AngularPos) => parse_f32(buf, Msg::AngularPos),
+            Some(MsgId::LinearPower) => parse_f32(buf, Msg::LinearPower),
+            Some(MsgId::AngularPower) => parse_f32(buf, Msg::AngularPower),
             Some(MsgId::LinearSet) => parse_f32(buf, Msg::LinearSet),
             Some(MsgId::AngularSet) => parse_f32(buf, Msg::AngularSet),
             Some(MsgId::AddLinear) => parse_2f32(buf, Msg::AddLinear),
@@ -244,6 +274,8 @@ impl Msg {
 
             &Msg::LinearPos(m) => write_f32(buf, MsgId::LinearPos, m),
             &Msg::AngularPos(m) => write_f32(buf, MsgId::AngularPos, m),
+            &Msg::LinearPower(m) => write_f32(buf, MsgId::LinearPower, m),
+            &Msg::AngularPower(m) => write_f32(buf, MsgId::AngularPower, m),
             &Msg::LinearSet(m) => write_f32(buf, MsgId::LinearSet, m),
             &Msg::AngularSet(m) => write_f32(buf, MsgId::AngularSet, m),
             &Msg::AddLinear(m1, m2) => {

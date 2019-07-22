@@ -20,6 +20,7 @@ default-features = false
 [dependencies.arrayvec]
 version = "0.4.11"
 default-features = false
+features = ["array-sizes-33-128"]
 
 [features]
 std = []

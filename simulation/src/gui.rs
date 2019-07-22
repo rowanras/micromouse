@@ -38,11 +38,53 @@ use imgui_winit_support::WinitPlatform;
 
 use arrayvec::ArrayVec;
 
+use micromouse_lib::mouse::Mouse;
 use micromouse_lib::msgs::Msg as MouseMsg;
 use micromouse_lib::msgs::MsgId as MouseMsgId;
 
 use crate::SimulatorState;
-use crate::MouseState;
+
+macro_rules! ui_f32 {
+    ($m:ident, $f:expr, $s:expr, $l:expr, $u:expr, $c:expr) => {
+        $c.view_float(
+            $u,
+            $s,
+            $l,
+            ImString::new(stringify!($m)).as_ref(),
+            $f,
+            None,
+            Some(MouseMsgId::$m),
+        );
+    }
+}
+
+macro_rules! ui_f32c {
+    ($m:ident, $f:expr, $s:expr, $l:expr, $u:expr, $c:expr) => {
+        $c.view_float(
+            $u,
+            $s,
+            $l,
+            ImString::new(stringify!($m)).as_ref(),
+            $f,
+            None,
+            None
+        );
+    }
+}
+
+macro_rules! ui_f32m {
+    ($m:ident, $f:expr, $s:expr, $l:expr, $u:expr, $c:expr) => {
+        $c.view_float(
+            $u,
+            $s,
+            $l,
+            ImString::new(stringify!($m)).as_ref(),
+            $f,
+            Some(MouseMsg::$m),
+            Some(MouseMsgId::$m),
+        );
+    }
+}
 
 #[derive(Debug)]
 pub enum GuiMsg {
@@ -50,7 +92,7 @@ pub enum GuiMsg {
 }
 
 struct Plot {
-    pub function: fn(&MouseState) -> Option<f32>,
+    pub function: fn(&Mouse, Option<&Mouse>) -> f32,
     pub showing: bool,
     pub range: [f32; 2],
 }
@@ -91,27 +133,21 @@ struct Gui<Msg: 'static + Send> {
 }
 
 impl<Msg: 'static + Send> Gui<Msg> {
-
     fn view_float(
         &mut self,
         ui: &mut Ui,
-        mouse_state: &MouseState,
+        mouse: &Mouse,
+        last_mouse: Option<&Mouse>,
         label: &ImStr,
-        value: fn(&MouseState) -> Option<f32>,
+        value: fn(&Mouse, Option<&Mouse>) -> f32,
         on_edit: Option<fn(f32) -> MouseMsg>,
-        id: MouseMsgId,
+        id: Option<MouseMsgId>,
     ) {
         ui.push_id(label);
         let popup_id = ImString::new(format!("Popup_{}", label));
 
         ui.columns(2, im_str!("state"), false);
-        ui.text(&format!("{}: ", label));
-        ui.same_line(0.0);
-        if let Some(value) = value(mouse_state) {
-            ui.text(&format!("{}", value));
-        } else {
-            ui.text("Unknown");
-        }
+        ui.text(&format!("{}: {}", label, value(mouse, last_mouse)));
 
         ui.next_column();
 
@@ -131,14 +167,16 @@ impl<Msg: 'static + Send> Gui<Msg> {
 
         ui.same_line(0.0);
 
-        let mut log = self.state.logged.remove(&id);
-        let update_log = ui.checkbox(im_str!("log"), &mut log);
-        if log {
-            self.state.logged.insert(id);
-        }
-        if update_log {
-            let log_msg_ids: ArrayVec<[MouseMsgId; 8]> = self.state.logged.iter().cloned().collect();
-            self.tx.send((self.on_gui_msg)(GuiMsg::Mouse(MouseMsg::Logged(log_msg_ids))));
+        if let Some(id) = id {
+            let mut log = self.state.logged.remove(&id);
+            let update_log = ui.checkbox(im_str!("log"), &mut log);
+            if log {
+                self.state.logged.insert(id);
+            }
+            if update_log {
+                let log_msg_ids = self.state.logged.iter().cloned().collect();
+                self.tx.send((self.on_gui_msg)(GuiMsg::Mouse(MouseMsg::Logged(log_msg_ids))));
+            }
         }
 
         if let Some(on_edit) = on_edit {
@@ -159,7 +197,7 @@ impl<Msg: 'static + Send> Gui<Msg> {
             } else {
                 self.state.editables.insert(
                     key.to_string(),
-                    value(mouse_state).unwrap_or(0.0) as f32,
+                    value(mouse, last_mouse),
                 );
             }
         }
@@ -169,61 +207,56 @@ impl<Msg: 'static + Send> Gui<Msg> {
         ui.pop_id();
     }
 
-    fn view_state(&mut self, ui: &mut Ui, mouse_state: &MouseState) {
+    fn view_state(&mut self, ui: &mut Ui, m: &Mouse, lm: Option<&Mouse>) {
 
-        self.view_float(
-            ui,
-            mouse_state,
-            im_str!("Time"),
-            |m| Some(m.time),
-            None,
-            MouseMsgId::Time,
-        );
+        ui_f32!(Time, |m, _| m.time, m, lm, ui, self);
+        ui_f32c!(DeltaTime, |m, lm| lm.map(|lm| m.time - lm.time).unwrap_or(0.0), m, lm, ui, self);
 
-        self.view_float(
-            ui,
-            mouse_state,
-            im_str!("Left motor power"),
-            |m| m.left_power,
-            Some(MouseMsg::LeftPower),
-            MouseMsgId::LeftPower,
-        );
+        ui_f32m!(LeftPos, |m, _| m.left_pos, m, lm, ui, self);
+        ui_f32m!(RightPos, |m, _| m.right_pos, m, lm, ui, self);
+        ui_f32c!(LeftVelocity, |m, lm| {
+            lm.map(|lm| (m.left_pos - lm.left_pos) / (m.time - lm.time)).unwrap_or(0.0)
+        }, m, lm, ui, self);
+        ui_f32c!(RightVelocity, |m, lm| {
+            lm.map(|lm| (m.right_pos - lm.right_pos) / (m.time - lm.time)).unwrap_or(0.0)
+        }, m, lm, ui, self);
+        ui_f32m!(LeftPower, |m, _| m.left_power, m, lm, ui, self);
+        ui_f32m!(RightPower, |m, _| m.right_power, m, lm, ui, self);
+        ui_f32m!(Battery, |m, _| m.battery, m, lm, ui, self);
 
-        self.view_float(
-            ui,
-            mouse_state,
-            im_str!("Right motor power"),
-            |m| m.right_power,
-            Some(MouseMsg::RightPower),
-            MouseMsgId::RightPower,
-        );
+        // Calculated
+        ui_f32m!(LinearPos, |m, _| m.linear_pos, m, lm, ui, self);
+        ui_f32m!(AngularPos, |m, _| m.angular_pos, m, lm, ui, self);
+        ui_f32c!(LinearVelocity, |m, lm| {
+            lm.map(|lm| (m.linear_pos - lm.linear_pos) / (m.time - lm.time)).unwrap_or(0.0)
+        }, m, lm, ui, self);
+        ui_f32c!(AngularVelocity, |m, lm| {
+            lm.map(|lm| (m.angular_pos - lm.angular_pos) / (m.time - lm.time)).unwrap_or(0.0)
+        }, m, lm, ui, self);
+        ui_f32m!(LinearPower, |m, _| m.linear_power, m, lm, ui, self);
+        ui_f32m!(AngularPower, |m, _| m.angular_power, m, lm, ui, self);
+        ui_f32m!(LinearSet, |m, _| m.linear_control.position as f32, m, lm, ui, self);
+        ui_f32m!(AngularSet, |m, _| m.angular_control.position as f32, m, lm, ui, self);
 
-        self.view_float(
-            ui,
-            mouse_state,
-            im_str!("Left Encoder"),
-            |m| m.left_pos,
-            None,
-            MouseMsgId::LeftPos,
-        );
-        self.view_float(
-            ui,
-            mouse_state,
-            im_str!("Right Encoder"),
-            |m| m.right_pos,
-            None,
-            MouseMsgId::RightPos,
-        );
+        // Config
+        ui_f32m!(LinearP, |m, _| m.linear_control.pid.p_gain as f32, m, lm, ui, self);
+        ui_f32m!(LinearI, |m, _| m.linear_control.pid.i_gain as f32, m, lm, ui, self);
+        ui_f32m!(LinearD, |m, _| m.linear_control.pid.d_gain as f32, m, lm, ui, self);
+        ui_f32m!(LinearAcc, |m, _| m.linear_control.acceleration as f32, m, lm, ui, self);
+        ui_f32m!(AngularP, |m, _| m.angular_control.pid.p_gain as f32, m, lm, ui, self);
+        ui_f32m!(AngularI, |m, _| m.angular_control.pid.i_gain as f32, m, lm, ui, self);
+        ui_f32m!(AngularD, |m, _| m.angular_control.pid.d_gain as f32, m, lm, ui, self);
+        ui_f32m!(AngularAcc, |m, _| m.angular_control.acceleration as f32, m, lm, ui, self);
     }
 
     fn run_ui(&mut self, ui: &mut Ui, simulator_state: &SimulatorState) {
-        let mouse_state: Vec<&MouseState> = if self.state.history_active {
-            simulator_state.mouse_states
+        let mice: Vec<&Mouse> = if self.state.history_active {
+            simulator_state.mice
                 .iter()
                 .filter(|m| (m.time as f32) < self.state.history_time)
                 .collect()
         } else {
-            simulator_state.mouse_states.iter().collect()
+            simulator_state.mice.iter().collect()
         };
 
         ui.window(im_str!("Debug"))
@@ -233,7 +266,8 @@ impl<Msg: 'static + Send> Gui<Msg> {
             });
 
         ui.window(im_str!("State"))
-            .size([400.0, 300.0], Condition::FirstUseEver)
+            .size([400.0, 800.0], Condition::FirstUseEver)
+            .position([400.0, 0.0], Condition::FirstUseEver)
             .build(|| {
                 ui.checkbox(
                     im_str!("Show history"),
@@ -245,8 +279,8 @@ impl<Msg: 'static + Send> Gui<Msg> {
                 )
                 .build();
 
-                if let Some(state) = mouse_state.last() {
-                    self.view_state(ui, state);
+                if let Some(mouse) = mice.last() {
+                    self.view_state(ui, mouse, mice.get((mice.len() as i32 - 2).max(0) as usize).map(|&m| m));
                 } else {
                     ui.text("No state yet :(");
                 }
@@ -270,12 +304,19 @@ impl<Msg: 'static + Send> Gui<Msg> {
                         self.state.plots.iter_mut().filter(|(l, p)| p.showing)
                     {
                         let last =
-                            mouse_state.last().map(|m| m.time).unwrap_or(0.0);
+                            mice.last().map(|m| m.time).unwrap_or(0.0);
 
-                        let points: Vec<_> = mouse_state
+                        let points: Vec<_> = mice
                             .iter()
-                            .filter(|m| m.time as f32 > last as f32 - *range)
-                            .map(|m| (plot.function)(m).unwrap_or(0.0) as f32)
+                            .filter(|m| m.time as f32 > last as f32 - *range).collect();
+
+                        let points: Vec<_> = points
+                            .first()
+                            .iter()
+                            .map(|s| (plot.function)(s, None))
+                            .chain(points.windows(2)
+                                .map(|s| (plot.function)(s[1], Some(s[0])))
+                            )
                             .collect();
 
                         ui.push_id(label);

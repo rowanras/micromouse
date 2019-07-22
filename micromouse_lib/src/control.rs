@@ -14,20 +14,25 @@ pub struct Target {
     pub distance: f64,
 }
 
+#[derive(Clone)]
 pub struct MotionControl {
-    pid: PIDController,
-    target_buffer: ArrayVec<[Target; TARGET_BUFFER_SIZE]>,
-    target: Option<Target>,
-    position: f64,
-    start_postition: f64,
-    velocity: f64,
-    acceleration: f64,
-    last_time: f64,
+    pub pid: PIDController,
+    pub target_buffer: ArrayVec<[Target; TARGET_BUFFER_SIZE]>,
+    pub target: Option<Target>,
+    pub position: f64,
+    pub start_postition: f64,
+    pub velocity: f64,
+    pub acceleration: f64,
+    pub last_time: f64,
 }
 
 impl MotionControl {
     pub fn new(config: MotionControlConfig) -> MotionControl {
-        let mut pid = PIDController::new(config.p as f64, config.i as f64, config.d as f64);
+        let mut pid = PIDController::new(
+            config.p as f64,
+            config.i as f64,
+            config.d as f64,
+        );
         pid.d_mode = DerivativeMode::OnMeasurement;
 
         MotionControl {
@@ -74,29 +79,5 @@ impl MotionControl {
 
         self.pid.set_target(self.position);
         self.pid.update(position, delta_time)
-    }
-
-    pub fn position(&self) -> f64 {
-        self.position
-    }
-
-    pub fn set_position(&mut self, position: f64) {
-        self.position = position;
-    }
-
-    pub fn set_p(&mut self, p: f64) {
-        self.pid.p_gain = p;
-    }
-
-    pub fn set_i(&mut self, i: f64) {
-        self.pid.i_gain = i;
-    }
-
-    pub fn set_d(&mut self, d: f64) {
-        self.pid.d_gain = d;
-    }
-
-    pub fn set_acc(&mut self, acc: f64) {
-        self.acceleration = acc;
     }
 }

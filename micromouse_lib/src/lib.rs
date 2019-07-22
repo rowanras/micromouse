@@ -1,8 +1,8 @@
 #![no_std]
 
 pub mod control;
-pub mod msgs;
 pub mod mouse;
+pub mod msgs;
 
 use core::f32;
 
@@ -15,6 +15,32 @@ pub const CONFIG2019: Config = Config {
         width: 64.0,
         length: 88.0,
         front_offset: 48.0,
+    },
+
+    linear_motion: MotionControl {
+        p: 1.0,
+        i: 0.0,
+        d: 0.0,
+        acc: 1.0,
+    },
+
+    angular_motion: MotionControl {
+        p: 1.0,
+        i: 0.0,
+        d: 0.0,
+        acc: 1.0,
+    },
+};
+
+pub const CONFIG2020_50: Config = Config {
+    mouse: Mouse {
+        wheel_diameter: 32.0,
+        gearbox_ratio: 50.0,
+        ticks_per_rev: 12.0,
+        wheelbase: 75.0,
+        width: 64.0,
+        length: 60.0,
+        front_offset: 40.0,
     },
 
     linear_motion: MotionControl {
