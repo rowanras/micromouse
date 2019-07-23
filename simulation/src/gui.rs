@@ -86,6 +86,20 @@ macro_rules! ui_f32m {
     }
 }
 
+macro_rules! ui_u8m {
+    ($m:ident, $f:expr, $s:expr, $l:expr, $u:expr, $c:expr) => {
+        $c.view_float(
+            $u,
+            $s,
+            $l,
+            ImString::new(stringify!($m)).as_ref(),
+            |m: &Mouse, lm: Option<&Mouse>| ($f)(m, lm) as f32,
+            Some(|v| MouseMsg::$m(v as u8)),
+            Some(MouseMsgId::$m),
+        );
+    }
+}
+
 #[derive(Debug)]
 pub enum GuiMsg {
     Mouse(MouseMsg)
@@ -223,6 +237,9 @@ impl<Msg: 'static + Send> Gui<Msg> {
         ui_f32m!(LeftPower, |m, _| m.left_power, m, lm, ui, self);
         ui_f32m!(RightPower, |m, _| m.right_power, m, lm, ui, self);
         ui_f32m!(Battery, |m, _| m.battery, m, lm, ui, self);
+        ui_u8m!(LeftDistance, |m: &Mouse, _| m.left_distance, m, lm, ui, self);
+        ui_u8m!(FrontDistance, |m: &Mouse, _| m.front_distance, m, lm, ui, self);
+        ui_u8m!(RightDistance, |m: &Mouse, _| m.right_distance, m, lm, ui, self);
 
         // Calculated
         ui_f32m!(LinearPos, |m, _| m.linear_pos, m, lm, ui, self);
