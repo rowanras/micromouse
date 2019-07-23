@@ -205,6 +205,10 @@ fn main() -> ! {
         orange_led.toggle().ignore();
     }
 
+    left_distance.start_ranging();
+    front_distance.start_ranging();
+    right_distance.start_ranging();
+
     let mut mouse = Mouse::new(config);
 
     let mut last_msg_time = 0.0;
@@ -215,11 +219,12 @@ fn main() -> ! {
 
         let now = time.now();
 
+        battery.update(now);
+        left_distance.update();
+        front_distance.update();
+        right_distance.update();
+
         if now - last_time >= 10 {
-            battery.update(now);
-            left_distance.update();
-            front_distance.update();
-            right_distance.update();
 
             mouse.time = now as f32 / 1000.0;
             mouse.battery = battery.raw() as f32;
