@@ -32,7 +32,7 @@ use imgui::TextureId;
 use imgui::Textures;
 use imgui::Ui;
 
-use imgui_glium_renderer::GliumRenderer;
+use imgui_glium_renderer::Renderer as GliumRenderer;
 use imgui_winit_support::HiDpiMode;
 use imgui_winit_support::WinitPlatform;
 

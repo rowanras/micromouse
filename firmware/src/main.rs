@@ -39,6 +39,9 @@ use stm32f4xx_hal as stm32f4;
 use stm32f4xx_hal::prelude::*;
 use stm32f4xx_hal::stm32 as stm32f405;
 
+use embedded_hal::digital::v2::OutputPin;
+use embedded_hal::digital::v2::ToggleableOutputPin;
+
 use ignore_result::Ignore;
 
 use micromouse_lib::CONFIG2019;
@@ -105,8 +108,8 @@ fn main() -> ! {
     let _middle_button = gpioc.pc11.into_pull_up_input();
     let _right_button = gpioc.pc12.into_pull_up_input();
 
-    orange_led.set_high();
-    blue_led.set_low();
+    orange_led.set_high().ignore();
+    blue_led.set_low().ignore();
 
     //writeln!(uart, "Initializing").ignore();
 
@@ -115,10 +118,10 @@ fn main() -> ! {
         let sda = gpiob.pb9.into_open_drain_output().into_alternate_af4();
 
         let mut gpio0 = gpioc.pc0.into_open_drain_output();
-        gpio0.set_high();
+        gpio0.set_high().ignore();
 
         let mut gpio1 = gpioc.pc1.into_open_drain_output();
-        gpio1.set_high();
+        gpio1.set_high().ignore();
 
         let i2c =
             stm32f4::i2c::I2c::i2c1(p.I2C1, (scl, sda), 100.khz(), clocks);
@@ -131,18 +134,18 @@ fn main() -> ! {
         distance
     };
 
-    orange_led.set_low();
-    blue_led.set_high();
+    orange_led.set_low().ignore();
+    blue_led.set_high().ignore();
 
     let mut left_distance = {
         let scl = gpiob.pb10.into_open_drain_output().into_alternate_af4();
         let sda = gpiob.pb11.into_open_drain_output().into_alternate_af4();
 
         let mut gpio0 = gpioc.pc2.into_open_drain_output();
-        gpio0.set_high();
+        gpio0.set_high().ignore();
 
         let mut gpio1 = gpioc.pc3.into_open_drain_output();
-        gpio1.set_high();
+        gpio1.set_high().ignore();
 
         let i2c =
             stm32f4::i2c::I2c::i2c2(p.I2C2, (scl, sda), 100.khz(), clocks);
@@ -155,18 +158,18 @@ fn main() -> ! {
         distance
     };
 
-    orange_led.set_high();
-    blue_led.set_high();
+    orange_led.set_high().ignore();
+    blue_led.set_high().ignore();
 
     let mut right_distance = {
         let scl = gpioa.pa8.into_open_drain_output().into_alternate_af4();
         let sda = gpioc.pc9.into_open_drain_output().into_alternate_af4();
 
         let mut gpio0 = gpioc.pc4.into_open_drain_output();
-        gpio0.set_high();
+        gpio0.set_high().ignore();
 
         let mut gpio1 = gpioc.pc5.into_open_drain_output();
-        gpio1.set_high();
+        gpio1.set_high().ignore();
 
         let i2c =
             stm32f4::i2c::I2c::i2c3(p.I2C3, (scl, sda), 100.khz(), clocks);
@@ -179,8 +182,8 @@ fn main() -> ! {
         distance
     };
 
-    blue_led.set_low();
-    orange_led.set_low();
+    blue_led.set_low().ignore();
+    orange_led.set_low().ignore();
 
     //writeln!(uart, "Reading id registers").ignore();
 
@@ -189,7 +192,7 @@ fn main() -> ! {
 
         //writeln!(uart, "{:x?}", buf).ignore();
 
-        orange_led.toggle();
+        orange_led.toggle().ignore();
     }
 
     for _ in 0..2 {
@@ -197,7 +200,7 @@ fn main() -> ! {
 
         //writeln!(uart, "{:x?}", buf).ignore();
 
-        orange_led.toggle();
+        orange_led.toggle().ignore();
     }
 
     for _ in 0..2 {
@@ -205,7 +208,7 @@ fn main() -> ! {
 
         //writeln!(uart, "{:x?}", buf).ignore();
 
-        orange_led.toggle();
+        orange_led.toggle().ignore();
     }
 
     let mut mouse = Mouse::new(config);
@@ -233,29 +236,29 @@ fn main() -> ! {
                 mouse.update(msg);
             } else if mouse.time - last_msg_time >= 1.0{
                 uart.clear_rx().ignore();
-                red_led.set_low();
+                red_led.set_low().ignore();
                 last_msg_time = mouse.time;
                 if let Err(ParseError::UnknownMsg(_)) = msg {
-                    red_led.set_high();
+                    red_led.set_high().ignore();
                 }
             }
 
             if uart.tx_len() == Ok(0) {
-                orange_led.set_low();
+                orange_led.set_low().ignore();
             } else {
-                orange_led.set_high();
+                orange_led.set_high().ignore();
             }
 
             if uart.rx_len() == Ok(0) {
-                blue_led.set_low();
+                blue_led.set_low().ignore();
             } else {
-                blue_led.set_high();
+                blue_led.set_high().ignore();
             }
 
             if mouse.logged.len() > 0 {
-                green_led.set_high();
+                green_led.set_high().ignore();
             } else {
-                green_led.set_low();
+                green_led.set_low().ignore();
             }
 
             mouse.linear_pos = (mouse.left_pos + mouse.right_pos) / 2.0;

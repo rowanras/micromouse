@@ -1,5 +1,6 @@
 .cquery_cache
 invoices
+target
 firmware/target
 simulation/target
 micromouse_lib/target

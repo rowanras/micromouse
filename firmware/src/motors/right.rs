@@ -32,8 +32,8 @@ impl RightMotor {
         timer.psc.write(|w| unsafe { w.psc().bits(10u16) });
         timer.cr1.write(|w| w.arpe().set_bit());
         timer.arr.write(|w| w.arr().bits(10000u32));
-        timer.ccr1.write(|w| w.ccr1().bits(0u32));
-        timer.ccr2.write(|w| w.ccr2().bits(0u32));
+        timer.ccr1.write(|w| w.ccr().bits(0u32));
+        timer.ccr2.write(|w| w.ccr().bits(0u32));
         timer.ccmr1_output.write(|w| unsafe {
             w.oc1m()
                 .bits(0b110)
@@ -57,18 +57,18 @@ impl Motor for RightMotor {
         self.timer.ccer.write(|w| {
             if power > 0 {
                 let speed = (power.abs() + FORWARD_DEADBAND) as u32;
-                self.timer.ccr1.write(|w| w.ccr1().bits(speed));
-                self.timer.ccr2.write(|w| w.ccr2().bits(speed));
+                self.timer.ccr1.write(|w| w.ccr().bits(speed));
+                self.timer.ccr2.write(|w| w.ccr().bits(speed));
                 w.cc1e().clear_bit().cc2e().set_bit()
             } else if power < 0 {
                 let speed = (power.abs() + BACKWARD_DEADBAND) as u32;
-                self.timer.ccr1.write(|w| w.ccr1().bits(speed));
-                self.timer.ccr2.write(|w| w.ccr2().bits(speed));
+                self.timer.ccr1.write(|w| w.ccr().bits(speed));
+                self.timer.ccr2.write(|w| w.ccr().bits(speed));
                 w.cc1e().set_bit().cc2e().clear_bit()
             } else {
                 let speed = 0;
-                self.timer.ccr1.write(|w| w.ccr1().bits(speed));
-                self.timer.ccr2.write(|w| w.ccr2().bits(speed));
+                self.timer.ccr1.write(|w| w.ccr().bits(speed));
+                self.timer.ccr2.write(|w| w.ccr().bits(speed));
                 w.cc1e().set_bit().cc2e().clear_bit()
             }
         });

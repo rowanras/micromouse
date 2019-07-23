@@ -23,14 +23,6 @@ use std::time::Instant;
 
 use image::ImageBuffer;
 
-use plotters::chart::ChartBuilder;
-use plotters::drawing::IntoDrawingArea;
-use plotters::series::LineSeries;
-use plotters::style;
-use plotters::style::Color;
-use plotters::style::IntoFont;
-use plotters::style::Palette;
-
 use micromouse_lib::mouse::Mouse;
 use micromouse_lib::msgs::Msg as MouseMsg;
 use micromouse_lib::CONFIG2019;
