@@ -33,6 +33,9 @@ pub enum MsgId {
     LeftPower = 0x12,
     RightPower = 0x13,
     Battery = 0x14,
+    LeftDistance = 0x15,
+    RightDistance = 0x16,
+    FrontDistance = 0x17,
 
     // Calculated
     LinearPos = 0x20,
@@ -68,6 +71,9 @@ pub enum Msg {
     LeftPower(f32),
     RightPower(f32),
     Battery(f32),
+    LeftDistance(u8),
+    RightDistance(u8),
+    FrontDistance(u8),
 
     // Calculated
     LinearPos(f32),
@@ -111,6 +117,17 @@ fn parse_id<R: ReadExact<Error = E>, E>(
     Ok(msg)
 }
 
+fn parse_u8<R: ReadExact<Error = E>, E>(
+    buf: &mut R,
+    msg: fn(u8) -> Msg,
+) -> Result<Msg, ParseError<E>> {
+    let mut msgbuf = [0; 2];
+    buf.take(&mut msgbuf)?;
+    let [_, a1] = msgbuf;
+    Ok(msg(a1))
+}
+
+#[allow(dead_code)]
 fn parse_u32<R: ReadExact<Error = E>, E>(
     buf: &mut R,
     msg: fn(u32) -> Msg,
@@ -173,6 +190,15 @@ fn write_id<W: WriteExact<Error = E>, E>(
     buf.write(&[msgid as u8])
 }
 
+fn write_u8<W: WriteExact<Error = E>, E>(
+    buf: &mut W,
+    msgid: MsgId,
+    msg: u8,
+) -> Result<(), E> {
+    buf.write(&[msgid as u8, msg])
+}
+
+#[allow(dead_code)]
 fn write_u32<W: WriteExact<Error = E>, E>(
     buf: &mut W,
     msgid: MsgId,
@@ -233,6 +259,9 @@ impl Msg {
             Some(MsgId::LeftPower) => parse_f32(buf, Msg::LeftPower),
             Some(MsgId::RightPower) => parse_f32(buf, Msg::RightPower),
             Some(MsgId::Battery) => parse_f32(buf, Msg::Battery),
+            Some(MsgId::LeftDistance) => parse_u8(buf, Msg::LeftDistance),
+            Some(MsgId::FrontDistance) => parse_u8(buf, Msg::FrontDistance),
+            Some(MsgId::RightDistance) => parse_u8(buf, Msg::RightDistance),
 
             Some(MsgId::LinearPos) => parse_f32(buf, Msg::LinearPos),
             Some(MsgId::AngularPos) => parse_f32(buf, Msg::AngularPos),
@@ -271,6 +300,9 @@ impl Msg {
             &Msg::LeftPower(m) => write_f32(buf, MsgId::LeftPower, m),
             &Msg::RightPower(m) => write_f32(buf, MsgId::RightPower, m),
             &Msg::Battery(m) => write_f32(buf, MsgId::Battery, m),
+            &Msg::LeftDistance(d) => write_u8(buf, MsgId::LeftDistance, d),
+            &Msg::FrontDistance(d) => write_u8(buf, MsgId::FrontDistance, d),
+            &Msg::RightDistance(d) => write_u8(buf, MsgId::RightDistance, d),
 
             &Msg::LinearPos(m) => write_f32(buf, MsgId::LinearPos, m),
             &Msg::AngularPos(m) => write_f32(buf, MsgId::AngularPos, m),

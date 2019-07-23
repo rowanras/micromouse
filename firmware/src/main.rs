@@ -189,25 +189,19 @@ fn main() -> ! {
 
     for _ in 0..2 {
         let _buf = front_distance.get_id_bytes();
-
-        //writeln!(uart, "{:x?}", buf).ignore();
-
+        uart.add_bytes(&_buf).ignore();
         orange_led.toggle().ignore();
     }
 
     for _ in 0..2 {
         let _buf = left_distance.get_id_bytes();
-
-        //writeln!(uart, "{:x?}", buf).ignore();
-
+        uart.add_bytes(&_buf).ignore();
         orange_led.toggle().ignore();
     }
 
     for _ in 0..2 {
         let _buf = right_distance.get_id_bytes();
-
-        //writeln!(uart, "{:x?}", buf).ignore();
-
+        uart.add_bytes(&_buf).ignore();
         orange_led.toggle().ignore();
     }
 
@@ -223,9 +217,15 @@ fn main() -> ! {
 
         if now - last_time >= 10 {
             battery.update(now);
+            left_distance.update();
+            front_distance.update();
+            right_distance.update();
 
             mouse.time = now as f32 / 1000.0;
             mouse.battery = battery.raw() as f32;
+            mouse.left_distance = left_distance.range();
+            mouse.front_distance = front_distance.range();
+            mouse.right_distance = right_distance.range();
             mouse.left_pos = mouse.mouse_config.ticks_to_mm(left_encoder.count() as f32);
             mouse.right_pos = mouse.mouse_config.ticks_to_mm(right_encoder.count() as f32);
 

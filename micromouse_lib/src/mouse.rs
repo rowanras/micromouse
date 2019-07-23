@@ -20,6 +20,10 @@ pub struct Mouse {
 
     pub battery: f32,
 
+    pub left_distance: u8,
+    pub front_distance: u8,
+    pub right_distance: u8,
+
     pub left_pos: f32,
     pub right_pos: f32,
 
@@ -47,6 +51,10 @@ impl Mouse {
             provided: ArrayVec::new(),
 
             time: 0.0,
+
+            left_distance: 0,
+            front_distance: 0,
+            right_distance: 0,
 
             left_pos: 0.0,
             right_pos: 0.0,
@@ -78,6 +86,9 @@ impl Mouse {
             Msg::LeftPower(p) => self.left_power = p,
             Msg::RightPower(p) => self.right_power = p,
             Msg::Battery(v) => self.battery = v,
+            Msg::LeftDistance(d) => self.left_distance = d,
+            Msg::FrontDistance(d) => self.front_distance = d,
+            Msg::RightDistance(d) => self.right_distance = d,
 
             // Calculated
             Msg::LinearPos(p) => self.linear_pos = p,
@@ -124,6 +135,9 @@ impl Mouse {
             MsgId::LeftPower => Msg::LeftPower(self.left_power),
             MsgId::RightPower => Msg::RightPower(self.right_power),
             MsgId::Battery => Msg::Battery(self.battery),
+            MsgId::LeftDistance => Msg::LeftDistance(self.left_distance),
+            MsgId::FrontDistance => Msg::FrontDistance(self.front_distance),
+            MsgId::RightDistance => Msg::RightDistance(self.right_distance),
 
             // Calculated
             MsgId::LinearPos => Msg::LinearPos(self.linear_pos),
