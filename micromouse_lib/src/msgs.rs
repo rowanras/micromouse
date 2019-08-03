@@ -112,6 +112,7 @@ pub enum Msg {
     At(ArrayVec<[u8; 64]>),
 }
 
+#[derive(Debug)]
 pub enum ParseError<E> {
     UnknownMsg(u8),
     ReadExact(E),

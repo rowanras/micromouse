@@ -23,6 +23,7 @@ use micromouse_lib::msgs::Msg as MouseMsg;
 use micromouse_lib::msgs::MsgId as MouseMsgId;
 use micromouse_lib::msgs::ReadExact;
 use micromouse_lib::msgs::WriteExact;
+use micromouse_lib::msgs::ParseError;
 
 pub struct Uart {
     serialport: Box<dyn SerialPort>,
@@ -35,7 +36,7 @@ impl Uart {
 
         println!("Opened port");
 
-        thread::sleep(Duration::from_secs(1));
+        thread::sleep(Duration::from_secs(10));
 
         loop {
             println!("Disabling logging");
@@ -89,6 +90,7 @@ impl Uart {
     }
 }
 
+#[derive(Debug)]
 pub enum UartError {
     NotEnoughBytes,
     Io(std::io::Error),
@@ -165,13 +167,24 @@ pub fn start<Msg: 'static + Send>(tx: Sender<Msg>, msg: fn(UartMsg) -> Msg) -> S
             let mut last_msg_time = Instant::now();
             loop {
                 let now = Instant::now();
-                if let Ok(mousemsg) = MouseMsg::parse_bytes(&mut port) {
-                    tx.send(msg(UartMsg::Mouse(mousemsg, port.buffer_len())));
-                    last_msg_time = now;
-                } else if now.duration_since(last_msg_time) >= Duration::from_secs(1) {
-                    println!("UART error. Clearing buffer");
+                let mousemsg = MouseMsg::parse_bytes(&mut port);
+
+                if mousemsg.is_err() && now.duration_since(last_msg_time) >= Duration::from_secs(1) {
                     port.clear();
                     last_msg_time = now;
+                }
+
+                match mousemsg {
+                    Ok(mousemsg) => {
+                        tx.send(msg(UartMsg::Mouse(mousemsg, port.buffer_len())));
+                        last_msg_time = now;
+                    },
+
+                    Err(ParseError::ReadExact(UartError::NotEnoughBytes)) => { },
+
+                    Err(e) => {
+                        println!("Uart Error! {:?}", e);
+                    }
                 }
 
                 if let Ok(mousemsg) = rx.try_recv() {
