@@ -189,19 +189,19 @@ fn main() -> ! {
 
     for _ in 0..2 {
         let _buf = front_distance.get_id_bytes();
-        uart.add_bytes(&_buf).ignore();
+        //uart.add_bytes(&_buf).ignore();
         orange_led.toggle().ignore();
     }
 
     for _ in 0..2 {
         let _buf = left_distance.get_id_bytes();
-        uart.add_bytes(&_buf).ignore();
+        //uart.add_bytes(&_buf).ignore();
         orange_led.toggle().ignore();
     }
 
     for _ in 0..2 {
         let _buf = right_distance.get_id_bytes();
-        uart.add_bytes(&_buf).ignore();
+        //uart.add_bytes(&_buf).ignore();
         orange_led.toggle().ignore();
     }
 
@@ -268,6 +268,9 @@ fn main() -> ! {
 
             mouse.linear_pos = (mouse.left_pos + mouse.right_pos) / 2.0;
             mouse.angular_pos = mouse.mouse_config.mm_to_rads((mouse.left_pos - mouse.right_pos) / 2.0);
+
+            //mouse.linear_power = mouse.linear_control.update(mouse.time as f64, mouse.linear_pos as f64) as f32;
+            //mouse.angular_power = mouse.angular_control.update(mouse.time as f64, mouse.angular_pos as f64) as f32;
 
             mouse.left_power = mouse.linear_power + mouse.angular_power;
             mouse.right_power = mouse.linear_power - mouse.angular_power;

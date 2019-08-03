@@ -8,6 +8,8 @@ use num_traits::FromPrimitive;
 use arrayvec::ArrayVec;
 
 use crate::mouse::MAX_MSGS;
+use crate::control::TARGET_BUFFER_SIZE;
+use crate::control::Target;
 
 pub trait ReadExact {
     type Error;
@@ -46,6 +48,10 @@ pub enum MsgId {
     AngularSet = 0x25,
     AddLinear = 0x26,
     AddAngular = 0x27,
+    LinearTarget = 0x28,
+    AngularTarget = 0x29,
+    LinearBuffer = 0x2a,
+    AngularBuffer = 0x2c,
 
     // Config
     LinearP = 0xa0,
@@ -56,6 +62,9 @@ pub enum MsgId {
     AngularI = 0xa5,
     AngularD = 0xa6,
     AngularAcc = 0xa7,
+
+    // Bluetooth AT commands
+    At = 0x2b,
 }
 
 #[derive(Debug)]
@@ -82,8 +91,12 @@ pub enum Msg {
     AngularPower(f32),
     LinearSet(f32),
     AngularSet(f32),
-    AddLinear(f32, f32),
-    AddAngular(f32, f32),
+    AddLinear(Target),
+    AddAngular(Target),
+    LinearTarget(Target),
+    AngularTarget(Target),
+    LinearBuffer(ArrayVec<[Target; TARGET_BUFFER_SIZE]>),
+    AngularBuffer(ArrayVec<[Target; TARGET_BUFFER_SIZE]>),
 
     // Config
     LinearP(f32),
@@ -94,6 +107,9 @@ pub enum Msg {
     AngularI(f32),
     AngularD(f32),
     AngularAcc(f32),
+
+    // Bluetooth AT commands
+    At(ArrayVec<[u8; 64]>),
 }
 
 pub enum ParseError<E> {
@@ -148,6 +164,7 @@ fn parse_f32<R: ReadExact<Error = E>, E>(
     Ok(msg(f32::from_bits(u32::from_le_bytes([a1, a2, a3, a4]))))
 }
 
+#[allow(dead_code)]
 fn parse_2f32<R: ReadExact<Error = E>, E>(
     buf: &mut R,
     msg: fn(f32, f32) -> Msg,
@@ -170,7 +187,7 @@ fn parse_msgids<R: ReadExact<Error = E>, E>(
     buf.peek(&mut lenbuf)?;
     let [_id, len] = lenbuf;
 
-    let msgbuf = &mut [0; 10][0..(len + 2) as usize];
+    let msgbuf = &mut [0; MAX_MSGS + 2][0..(len + 2) as usize];
     buf.take(msgbuf)?;
 
     let msgids: ArrayVec<[MsgId; MAX_MSGS]> = msgbuf
@@ -180,6 +197,57 @@ fn parse_msgids<R: ReadExact<Error = E>, E>(
         .collect();
 
     Ok(msg(msgids))
+}
+
+fn parse_target<R: ReadExact<Error = E>, E>(
+    buf: &mut R,
+    msg: fn(Target) -> Msg,
+) -> Result<Msg, ParseError<E>> {
+    let mut msgbuf = [0; 9];
+    buf.take(&mut msgbuf)?;
+    let [_, a1, a2, a3, a4, b1, b2, b3, b4] = msgbuf;
+    Ok(msg(Target {
+        velocity: f32::from_bits(u32::from_le_bytes([a1, a2, a3, a4])) as f64,
+        distance: f32::from_bits(u32::from_le_bytes([b1, b2, b3, b4])) as f64,
+    }))
+}
+
+fn parse_targets<R: ReadExact<Error = E>, E>(
+    buf: &mut R,
+    msg: fn(ArrayVec<[Target; TARGET_BUFFER_SIZE]>) -> Msg,
+) -> Result<Msg, ParseError<E>> {
+    // attept to get the length
+    let mut lenbuf = [0; 2];
+    buf.peek(&mut lenbuf)?;
+    let [_id, len] = lenbuf;
+
+    let targetbuf = &mut [0; TARGET_BUFFER_SIZE*8 + 2][0..(len*8 + 2) as usize];
+    buf.take(targetbuf)?; 
+    let targetbuf: ArrayVec<[u8; TARGET_BUFFER_SIZE*8]> = targetbuf.into_iter().skip(2).map(|&mut b| b).collect();
+
+    let targets = targetbuf
+        .chunks(8)
+        .map(|buf| Target {
+            velocity: f32::from_bits(u32::from_le_bytes([buf[0], buf[1], buf[2], buf[3]])) as f64,
+            distance: f32::from_bits(u32::from_le_bytes([buf[4], buf[5], buf[6], buf[7]])) as f64,
+        })
+        .collect();
+
+    Ok(msg(targets))
+}
+
+fn parse_line<R: ReadExact<Error = E>, E>(
+    buf: &mut R,
+    msg: fn(ArrayVec<[u8; 64]>) -> Msg,
+) -> Result<Msg, ParseError<E>> {
+    let mut atbuf = ArrayVec::new();
+    let mut inbuf = [0; 1];
+    while inbuf[0] != 0x0a {
+        buf.take(&mut inbuf)?;
+        atbuf.try_push(inbuf[0]);
+    }
+
+    Ok(msg(atbuf))
 }
 
 #[allow(dead_code)]
@@ -217,6 +285,7 @@ fn write_f32<W: WriteExact<Error = E>, E>(
     buf.write(&[msgid as u8, a1, a2, a3, a4])
 }
 
+#[allow(dead_code)]
 fn write_2f32<W: WriteExact<Error = E>, E>(
     buf: &mut W,
     msgid: MsgId,
@@ -233,11 +302,38 @@ fn write_msgids<W: WriteExact<Error = E>, E>(
     msgid: MsgId,
     msgids: &[MsgId],
 ) -> Result<(), E> {
-    let bytes: ArrayVec<[u8; MAX_MSGS+1]> = [msgid as u8]
+    let bytes: ArrayVec<[u8; MAX_MSGS+2]> = [msgid as u8]
         .into_iter()
         .map(|&m| m)
         .chain([MAX_MSGS.min(msgids.len()) as u8].into_iter().map(|&l| l))
         .chain(msgids.into_iter().map(|&m| m as u8))
+        .collect();
+    buf.write(&bytes)
+}
+
+fn write_target<W: WriteExact<Error = E>, E>(
+    buf: &mut W,
+    msgid: MsgId,
+    msg: Target,
+) -> Result<(), E> {
+    let [a1, a2, a3, a4] = u32::to_le_bytes(f32::to_bits(msg.velocity as f32));
+    let [b1, b2, b3, b4] = u32::to_le_bytes(f32::to_bits(msg.distance as f32));
+    buf.write(&[msgid as u8, a1, a2, a3, a4, b1, b2, b3, b4])
+}
+
+fn write_targets<W: WriteExact<Error = E>, E>(
+    buf: &mut W,
+    msgid: MsgId,
+    targets: &[Target],
+) -> Result<(), E> {
+    let bytes: ArrayVec<[u8; 768]> = [msgid as u8]
+        .into_iter()
+        .map(|&m| m)
+        .chain([MAX_MSGS.min(targets.len()) as u8].into_iter().map(|&l| l))
+        .chain(targets.into_iter().flat_map(|t| {
+            ArrayVec::from(u32::to_le_bytes(f32::to_bits(t.velocity as f32))).into_iter()
+                .chain(ArrayVec::from(u32::to_le_bytes(f32::to_bits(t.velocity as f32))).into_iter())
+        }))
         .collect();
     buf.write(&bytes)
 }
@@ -269,8 +365,12 @@ impl Msg {
             Some(MsgId::AngularPower) => parse_f32(buf, Msg::AngularPower),
             Some(MsgId::LinearSet) => parse_f32(buf, Msg::LinearSet),
             Some(MsgId::AngularSet) => parse_f32(buf, Msg::AngularSet),
-            Some(MsgId::AddLinear) => parse_2f32(buf, Msg::AddLinear),
-            Some(MsgId::AddAngular) => parse_2f32(buf, Msg::AddAngular),
+            Some(MsgId::AddLinear) => parse_target(buf, Msg::AddLinear),
+            Some(MsgId::AddAngular) => parse_target(buf, Msg::AddAngular),
+            Some(MsgId::LinearTarget) => parse_target(buf, Msg::LinearTarget),
+            Some(MsgId::AngularTarget) => parse_target(buf, Msg::AngularTarget),
+            Some(MsgId::LinearBuffer) => parse_targets(buf, Msg::LinearBuffer),
+            Some(MsgId::AngularBuffer) => parse_targets(buf, Msg::AngularBuffer),
 
             Some(MsgId::LinearP) => parse_f32(buf, Msg::LinearP),
             Some(MsgId::LinearI) => parse_f32(buf, Msg::LinearI),
@@ -281,6 +381,8 @@ impl Msg {
             Some(MsgId::AngularI) => parse_f32(buf, Msg::AngularI),
             Some(MsgId::AngularD) => parse_f32(buf, Msg::AngularD),
             Some(MsgId::AngularAcc) => parse_f32(buf, Msg::AngularAcc),
+
+            Some(MsgId::At) => parse_line(buf, Msg::At),
 
             None => Err(ParseError::UnknownMsg(id[0])),
         }
@@ -310,12 +412,12 @@ impl Msg {
             &Msg::AngularPower(m) => write_f32(buf, MsgId::AngularPower, m),
             &Msg::LinearSet(m) => write_f32(buf, MsgId::LinearSet, m),
             &Msg::AngularSet(m) => write_f32(buf, MsgId::AngularSet, m),
-            &Msg::AddLinear(m1, m2) => {
-                write_2f32(buf, MsgId::AddLinear, m1, m2)
-            }
-            &Msg::AddAngular(m1, m2) => {
-                write_2f32(buf, MsgId::AddAngular, m1, m2)
-            }
+            &Msg::AddLinear(t) => write_target(buf, MsgId::AddLinear, t),
+            &Msg::AddAngular(t) => write_target(buf, MsgId::AddAngular, t),
+            &Msg::LinearTarget(t) => write_target(buf, MsgId::LinearTarget, t),
+            &Msg::AngularTarget(t) => write_target(buf, MsgId::AngularTarget, t),
+            &Msg::LinearBuffer(ref t) => write_targets(buf, MsgId::LinearBuffer, t),
+            &Msg::AngularBuffer(ref t) => write_targets(buf, MsgId::AngularBuffer, t),
 
             &Msg::LinearP(m) => write_f32(buf, MsgId::LinearP, m),
             &Msg::LinearI(m) => write_f32(buf, MsgId::LinearI, m),
@@ -326,6 +428,8 @@ impl Msg {
             &Msg::AngularI(m) => write_f32(buf, MsgId::AngularI, m),
             &Msg::AngularD(m) => write_f32(buf, MsgId::AngularD, m),
             &Msg::AngularAcc(m) => write_f32(buf, MsgId::AngularAcc, m),
+
+            &Msg::At(_) => Ok(()),
         }
     }
 }

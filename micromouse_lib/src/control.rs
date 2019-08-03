@@ -6,9 +6,9 @@ use arrayvec::ArrayVec;
 
 use crate::MotionControl as MotionControlConfig;
 
-const TARGET_BUFFER_SIZE: usize = 64;
+pub const TARGET_BUFFER_SIZE: usize = 64;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct Target {
     pub velocity: f64,
     pub distance: f64,
@@ -18,7 +18,7 @@ pub struct Target {
 pub struct MotionControl {
     pub pid: PIDController,
     pub target_buffer: ArrayVec<[Target; TARGET_BUFFER_SIZE]>,
-    pub target: Option<Target>,
+    pub target: Target,
     pub position: f64,
     pub start_postition: f64,
     pub velocity: f64,
@@ -38,7 +38,7 @@ impl MotionControl {
         MotionControl {
             pid,
             target_buffer: ArrayVec::new(),
-            target: None,
+            target: Target::default(),
             position: 0.0,
             start_postition: 0.0,
             velocity: 0.0,
@@ -51,29 +51,34 @@ impl MotionControl {
         self.target_buffer.try_insert(0, target).is_ok()
     }
 
+    pub fn target(&self) -> Target {
+        self.target
+    }
+
+    pub fn target_buffer(&self) -> &ArrayVec<[Target; TARGET_BUFFER_SIZE]> {
+        &self.target_buffer
+    }
+
     pub fn update(&mut self, now: f64, position: f64) -> f64 {
         let delta_time = now - self.last_time;
 
         self.velocity += self.acceleration * delta_time;
 
-        let target_velocity = self.target.map(|t| t.velocity).unwrap_or(0.0);
-
-        if (target_velocity >= 0.0 && self.velocity >= target_velocity)
-            || (target_velocity <= 0.0 && self.velocity <= target_velocity)
+        if (self.target.velocity >= 0.0 && self.velocity >= self.target.velocity)
+            || (self.target.velocity <= 0.0 && self.velocity <= self.target.velocity)
         {
-            self.velocity = target_velocity;
+            self.velocity = self.target.velocity;
         }
 
         self.position += self.velocity * delta_time;
 
-        let target_position = self.target.map(|t| t.distance).unwrap_or(0.0)
-            + self.start_postition;
+        let target_position = self.start_postition + self.target.distance;
 
         if (target_position >= 0.0 && self.position >= target_position)
             || (target_position <= 0.0 && self.position <= target_position)
         {
             self.position = target_position;
-            self.target = self.target_buffer.pop();
+            self.target = self.target_buffer.pop().unwrap_or_default();
             self.start_postition = target_position;
         }
 

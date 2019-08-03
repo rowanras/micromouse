@@ -1,6 +1,7 @@
 use std::usize;
 
 use std::time::Duration;
+use std::time::Instant;
 
 use std::io::Read;
 
@@ -70,6 +71,10 @@ impl Uart {
             serialport,
             buf: Vec::new(),
         })
+    }
+
+    pub fn clear(&mut self) {
+        self.buf.clear();
     }
 
     fn read_to_buffer(&mut self) {
@@ -157,9 +162,16 @@ pub fn start<Msg: 'static + Send>(tx: Sender<Msg>, msg: fn(UartMsg) -> Msg) -> S
         };
 
         if let Ok(mut port) = Uart::new("/dev/rfcomm0", serial_settings) {
+            let mut last_msg_time = Instant::now();
             loop {
+                let now = Instant::now();
                 if let Ok(mousemsg) = MouseMsg::parse_bytes(&mut port) {
                     tx.send(msg(UartMsg::Mouse(mousemsg, port.buffer_len())));
+                    last_msg_time = now;
+                } else if now.duration_since(last_msg_time) >= Duration::from_secs(1) {
+                    println!("UART error. Clearing buffer");
+                    port.clear();
+                    last_msg_time = now;
                 }
 
                 if let Ok(mousemsg) = rx.try_recv() {

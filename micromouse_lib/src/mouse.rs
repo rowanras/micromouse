@@ -97,18 +97,12 @@ impl Mouse {
             Msg::AngularPower(p) => self.angular_power = p,
             Msg::LinearSet(s) => self.linear_control.position = s as f64,
             Msg::AngularSet(s) => self.linear_control.position = s as f64,
-            Msg::AddLinear(v, d) => {
-                self.linear_control.queue_target(Target {
-                    velocity: v as f64,
-                    distance: d as f64,
-                });
-            }
-            Msg::AddAngular(v, d) => {
-                self.angular_control.queue_target(Target {
-                    velocity: v as f64,
-                    distance: d as f64,
-                });
-            }
+            Msg::AddLinear(t) => { self.linear_control.queue_target(t); },
+            Msg::AddAngular(t) => { self.angular_control.queue_target(t); }
+            Msg::LinearTarget(t) => self.linear_control.target = t,
+            Msg::AngularTarget(t) => self.angular_control.target = t,
+            Msg::LinearBuffer(t) => self.linear_control.target_buffer = t,
+            Msg::AngularBuffer(t) => self.angular_control.target_buffer = t,
 
             // Config
             Msg::LinearP(p) => self.linear_control.pid.p_gain = p as f64,
@@ -119,6 +113,8 @@ impl Mouse {
             Msg::AngularI(i) => self.angular_control.pid.i_gain = i as f64,
             Msg::AngularD(d) => self.angular_control.pid.d_gain = d as f64,
             Msg::AngularAcc(a) => self.angular_control.acceleration = a as f64,
+
+            Msg::At(_) => {},
         }
     }
 
@@ -150,8 +146,12 @@ impl Mouse {
             MsgId::AngularSet => {
                 Msg::AngularSet(self.linear_control.position as f32)
             }
-            MsgId::AddLinear => Msg::AddLinear(0.0, 0.0),
-            MsgId::AddAngular => Msg::AddAngular(0.0, 0.0),
+            MsgId::AddLinear => Msg::AddLinear(Target::default()),
+            MsgId::AddAngular => Msg::AddAngular(Target::default()),
+            MsgId::LinearTarget => Msg::LinearTarget(self.linear_control.target),
+            MsgId::AngularTarget => Msg::AngularTarget(self.angular_control.target),
+            MsgId::LinearBuffer => Msg::LinearBuffer(self.linear_control.target_buffer.clone()),
+            MsgId::AngularBuffer => Msg::AngularBuffer(self.angular_control.target_buffer.clone()),
 
             // Config
             MsgId::LinearP => {
@@ -178,6 +178,8 @@ impl Mouse {
             MsgId::AngularAcc => {
                 Msg::AngularAcc(self.angular_control.acceleration as f32)
             }
+
+            MsgId::At => Msg::At(ArrayVec::new())
         }
     }
 }
