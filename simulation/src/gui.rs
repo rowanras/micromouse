@@ -276,6 +276,12 @@ impl<Msg: 'static + Send> Gui<Msg> {
             simulator_state.mice.iter().collect()
         };
 
+        ui.window(im_str!("Simulator"))
+            .size([400.0, 300.0], Condition::FirstUseEver)
+            .build(|| {
+                ui.label_text(im_str!("Uart buffer"), ImString::new(simulator_state.uart_buffer_len.to_string()).as_ref());
+            });
+
         ui.window(im_str!("Debug"))
             .size([400.0, 300.0], Condition::FirstUseEver)
             .build(|| {
@@ -387,12 +393,6 @@ impl<Msg: 'static + Send> Gui<Msg> {
                 } else {
                     ui.text("No mice");
                 }
-            });
-
-        ui.window(im_str!("Simulator"))
-            .size([400.0, 300.0], Condition::FirstUseEver)
-            .build(|| {
-                ui.label_text(im_str!("Uart buffer"), ImString::new(simulator_state.uart_buffer_len.to_string()).as_ref());
             });
     }
 }

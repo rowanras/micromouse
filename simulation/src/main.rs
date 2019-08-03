@@ -65,7 +65,7 @@ fn main() {
 
             let last_time = next_state.time;
 
-            println!("{:?}", msg);
+            //println!("{:?}", msg);
             match msg {
                 Msg::Uart(uartmsg) => match uartmsg {
                     uart::UartMsg::Mouse(mousemsg, buf_len) => {

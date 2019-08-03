@@ -163,7 +163,7 @@ pub fn start<Msg: 'static + Send>(tx: Sender<Msg>, msg: fn(UartMsg) -> Msg) -> S
             timeout: Duration::from_millis(1),
         };
 
-        if let Ok(mut port) = Uart::new("/dev/rfcomm0", serial_settings) {
+        if let Ok(mut port) = Uart::new("/dev/ttyUSB0", serial_settings) {
             let mut last_msg_time = Instant::now();
             loop {
                 let now = Instant::now();
