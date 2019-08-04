@@ -2,7 +2,7 @@ language: rust
 
 before_script:
   - rustup update
-  - rustup default nightly
+  - rustup default stable
   - rustup target add thumbv7em-none-eabihf
 
 script:
