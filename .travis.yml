@@ -1,6 +1,4 @@
 language: rust
-rust:
-  - nightly
 
 before_script:
   - rustup update
