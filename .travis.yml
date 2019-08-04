@@ -1,12 +1,15 @@
 language: rust
+rust:
+  - nightly
 
 before_script:
+  - rustup update
   - rustup default nightly
   - rustup target add thumbv7em-none-eabihf
 
 script:
   - cd firmware
-  - cargo build
+  - cargo build --verbose --all
   - cd ../simulation
-  - cargo build
+  - cargo build --verbose --all
 
