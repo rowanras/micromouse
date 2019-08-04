@@ -7,9 +7,9 @@ use num_traits::FromPrimitive;
 
 use arrayvec::ArrayVec;
 
-use crate::mouse::MAX_MSGS;
-use crate::control::TARGET_BUFFER_SIZE;
 use crate::control::Target;
+use crate::control::TARGET_BUFFER_SIZE;
+use crate::mouse::MAX_MSGS;
 
 pub trait ReadExact {
     type Error;
@@ -125,10 +125,7 @@ impl<E> From<E> for ParseError<E> {
 }
 
 #[allow(dead_code)]
-fn parse_id<R: ReadExact<Error = E>, E>(
-    buf: &mut R,
-    msg: Msg,
-) -> Result<Msg, ParseError<E>> {
+fn parse_id<R: ReadExact<Error = E>, E>(buf: &mut R, msg: Msg) -> Result<Msg, ParseError<E>> {
     let mut msgbuf = [0; 1];
     buf.take(&mut msgbuf)?;
     Ok(msg)
@@ -208,8 +205,8 @@ fn parse_target<R: ReadExact<Error = E>, E>(
     buf.take(&mut msgbuf)?;
     let [_, a1, a2, a3, a4, b1, b2, b3, b4] = msgbuf;
     Ok(msg(Target {
-        velocity: f32::from_bits(u32::from_le_bytes([a1, a2, a3, a4])) as f64,
-        distance: f32::from_bits(u32::from_le_bytes([b1, b2, b3, b4])) as f64,
+        velocity: f32::from_bits(u32::from_le_bytes([a1, a2, a3, a4])),
+        distance: f32::from_bits(u32::from_le_bytes([b1, b2, b3, b4])),
     }))
 }
 
@@ -222,15 +219,16 @@ fn parse_targets<R: ReadExact<Error = E>, E>(
     buf.peek(&mut lenbuf)?;
     let [_id, len] = lenbuf;
 
-    let targetbuf = &mut [0; TARGET_BUFFER_SIZE*8 + 2][0..(len*8 + 2) as usize];
-    buf.take(targetbuf)?; 
-    let targetbuf: ArrayVec<[u8; TARGET_BUFFER_SIZE*8]> = targetbuf.into_iter().skip(2).map(|&mut b| b).collect();
+    let targetbuf = &mut [0; TARGET_BUFFER_SIZE * 8 + 2][0..(len * 8 + 2) as usize];
+    buf.take(targetbuf)?;
+    let targetbuf: ArrayVec<[u8; TARGET_BUFFER_SIZE * 8]> =
+        targetbuf.into_iter().skip(2).map(|&mut b| b).collect();
 
     let targets = targetbuf
         .chunks(8)
         .map(|buf| Target {
-            velocity: f32::from_bits(u32::from_le_bytes([buf[0], buf[1], buf[2], buf[3]])) as f64,
-            distance: f32::from_bits(u32::from_le_bytes([buf[4], buf[5], buf[6], buf[7]])) as f64,
+            velocity: f32::from_bits(u32::from_le_bytes([buf[0], buf[1], buf[2], buf[3]])),
+            distance: f32::from_bits(u32::from_le_bytes([buf[4], buf[5], buf[6], buf[7]])),
         })
         .collect();
 
@@ -252,36 +250,21 @@ fn parse_line<R: ReadExact<Error = E>, E>(
 }
 
 #[allow(dead_code)]
-fn write_id<W: WriteExact<Error = E>, E>(
-    buf: &mut W,
-    msgid: MsgId,
-) -> Result<(), E> {
+fn write_id<W: WriteExact<Error = E>, E>(buf: &mut W, msgid: MsgId) -> Result<(), E> {
     buf.write(&[msgid as u8])
 }
 
-fn write_u8<W: WriteExact<Error = E>, E>(
-    buf: &mut W,
-    msgid: MsgId,
-    msg: u8,
-) -> Result<(), E> {
+fn write_u8<W: WriteExact<Error = E>, E>(buf: &mut W, msgid: MsgId, msg: u8) -> Result<(), E> {
     buf.write(&[msgid as u8, msg])
 }
 
 #[allow(dead_code)]
-fn write_u32<W: WriteExact<Error = E>, E>(
-    buf: &mut W,
-    msgid: MsgId,
-    msg: u32,
-) -> Result<(), E> {
+fn write_u32<W: WriteExact<Error = E>, E>(buf: &mut W, msgid: MsgId, msg: u32) -> Result<(), E> {
     let [a1, a2, a3, a4] = u32::to_le_bytes(msg);
     buf.write(&[msgid as u8, a1, a2, a3, a4])
 }
 
-fn write_f32<W: WriteExact<Error = E>, E>(
-    buf: &mut W,
-    msgid: MsgId,
-    msg: f32,
-) -> Result<(), E> {
+fn write_f32<W: WriteExact<Error = E>, E>(buf: &mut W, msgid: MsgId, msg: f32) -> Result<(), E> {
     let [a1, a2, a3, a4] = u32::to_le_bytes(f32::to_bits(msg));
     buf.write(&[msgid as u8, a1, a2, a3, a4])
 }
@@ -303,7 +286,7 @@ fn write_msgids<W: WriteExact<Error = E>, E>(
     msgid: MsgId,
     msgids: &[MsgId],
 ) -> Result<(), E> {
-    let bytes: ArrayVec<[u8; MAX_MSGS+2]> = [msgid as u8]
+    let bytes: ArrayVec<[u8; MAX_MSGS + 2]> = [msgid as u8]
         .into_iter()
         .map(|&m| m)
         .chain([MAX_MSGS.min(msgids.len()) as u8].into_iter().map(|&l| l))
@@ -317,8 +300,8 @@ fn write_target<W: WriteExact<Error = E>, E>(
     msgid: MsgId,
     msg: Target,
 ) -> Result<(), E> {
-    let [a1, a2, a3, a4] = u32::to_le_bytes(f32::to_bits(msg.velocity as f32));
-    let [b1, b2, b3, b4] = u32::to_le_bytes(f32::to_bits(msg.distance as f32));
+    let [a1, a2, a3, a4] = u32::to_le_bytes(f32::to_bits(msg.velocity));
+    let [b1, b2, b3, b4] = u32::to_le_bytes(f32::to_bits(msg.distance));
     buf.write(&[msgid as u8, a1, a2, a3, a4, b1, b2, b3, b4])
 }
 
@@ -332,17 +315,16 @@ fn write_targets<W: WriteExact<Error = E>, E>(
         .map(|&m| m)
         .chain([MAX_MSGS.min(targets.len()) as u8].into_iter().map(|&l| l))
         .chain(targets.into_iter().flat_map(|t| {
-            ArrayVec::from(u32::to_le_bytes(f32::to_bits(t.velocity as f32))).into_iter()
-                .chain(ArrayVec::from(u32::to_le_bytes(f32::to_bits(t.velocity as f32))).into_iter())
+            ArrayVec::from(u32::to_le_bytes(f32::to_bits(t.velocity)))
+                .into_iter()
+                .chain(ArrayVec::from(u32::to_le_bytes(f32::to_bits(t.distance))).into_iter())
         }))
         .collect();
     buf.write(&bytes)
 }
 
 impl Msg {
-    pub fn parse_bytes<R: ReadExact<Error = E>, E>(
-        buf: &mut R,
-    ) -> Result<Self, ParseError<E>> {
+    pub fn parse_bytes<R: ReadExact<Error = E>, E>(buf: &mut R) -> Result<Self, ParseError<E>> {
         let mut id = [0; 1];
         buf.peek(&mut id)?;
 
@@ -389,10 +371,7 @@ impl Msg {
         }
     }
 
-    pub fn generate_bytes<W: WriteExact<Error = E>, E>(
-        &self,
-        buf: &mut W,
-    ) -> Result<(), E> {
+    pub fn generate_bytes<W: WriteExact<Error = E>, E>(&self, buf: &mut W) -> Result<(), E> {
         match self {
             &Msg::Time(m) => write_f32(buf, MsgId::Time, m),
             &Msg::Logged(ref m) => write_msgids(buf, MsgId::Logged, m),

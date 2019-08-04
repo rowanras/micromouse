@@ -9,7 +9,7 @@ use crate::Mouse as MouseConfig;
 
 pub const MAX_MSGS: usize = 64;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Mouse {
     pub mouse_config: MouseConfig,
 
@@ -95,26 +95,40 @@ impl Mouse {
             Msg::AngularPos(p) => self.angular_pos = p,
             Msg::LinearPower(p) => self.linear_power = p,
             Msg::AngularPower(p) => self.angular_power = p,
-            Msg::LinearSet(s) => self.linear_control.position = s as f64,
-            Msg::AngularSet(s) => self.linear_control.position = s as f64,
-            Msg::AddLinear(t) => { self.linear_control.queue_target(t); },
-            Msg::AddAngular(t) => { self.angular_control.queue_target(t); }
+            Msg::LinearSet(s) => self.linear_control.velocity = s,
+            Msg::AngularSet(s) => self.linear_control.velocity = s,
+            Msg::AddLinear(t) => {
+                self.linear_control.queue_target(t);
+            }
+            Msg::AddAngular(t) => {
+                self.angular_control.queue_target(t);
+            }
             Msg::LinearTarget(t) => self.linear_control.target = t,
             Msg::AngularTarget(t) => self.angular_control.target = t,
-            Msg::LinearBuffer(t) => self.linear_control.target_buffer = t,
-            Msg::AngularBuffer(t) => self.angular_control.target_buffer = t,
+            Msg::LinearBuffer(t) => {
+                self.linear_control.target_buffer.clear();
+                for t in t.into_iter() {
+                    self.linear_control.queue_target(t);
+                }
+            }
+            Msg::AngularBuffer(t) => {
+                self.angular_control.target_buffer.clear();
+                for t in t.into_iter() {
+                    self.angular_control.queue_target(t);
+                }
+            }
 
             // Config
             Msg::LinearP(p) => self.linear_control.pid.p_gain = p as f64,
             Msg::LinearI(i) => self.linear_control.pid.i_gain = i as f64,
             Msg::LinearD(d) => self.linear_control.pid.d_gain = d as f64,
-            Msg::LinearAcc(a) => self.linear_control.acceleration = a as f64,
+            Msg::LinearAcc(a) => self.linear_control.acceleration = a,
             Msg::AngularP(p) => self.angular_control.pid.p_gain = p as f64,
             Msg::AngularI(i) => self.angular_control.pid.i_gain = i as f64,
             Msg::AngularD(d) => self.angular_control.pid.d_gain = d as f64,
-            Msg::AngularAcc(a) => self.angular_control.acceleration = a as f64,
+            Msg::AngularAcc(a) => self.angular_control.acceleration = a,
 
-            Msg::At(_) => {},
+            Msg::At(_) => {}
         }
     }
 
@@ -140,12 +154,8 @@ impl Mouse {
             MsgId::AngularPos => Msg::AngularPos(self.angular_pos),
             MsgId::LinearPower => Msg::LinearPower(self.linear_power),
             MsgId::AngularPower => Msg::AngularPower(self.angular_power),
-            MsgId::LinearSet => {
-                Msg::LinearSet(self.linear_control.position as f32)
-            }
-            MsgId::AngularSet => {
-                Msg::AngularSet(self.linear_control.position as f32)
-            }
+            MsgId::LinearSet => Msg::LinearSet(self.linear_control.velocity as f32),
+            MsgId::AngularSet => Msg::AngularSet(self.linear_control.velocity as f32),
             MsgId::AddLinear => Msg::AddLinear(Target::default()),
             MsgId::AddAngular => Msg::AddAngular(Target::default()),
             MsgId::LinearTarget => Msg::LinearTarget(self.linear_control.target),
@@ -154,32 +164,16 @@ impl Mouse {
             MsgId::AngularBuffer => Msg::AngularBuffer(self.angular_control.target_buffer.clone()),
 
             // Config
-            MsgId::LinearP => {
-                Msg::LinearP(self.linear_control.pid.p_gain as f32)
-            }
-            MsgId::LinearI => {
-                Msg::LinearI(self.linear_control.pid.i_gain as f32)
-            }
-            MsgId::LinearD => {
-                Msg::LinearD(self.linear_control.pid.d_gain as f32)
-            }
-            MsgId::LinearAcc => {
-                Msg::LinearAcc(self.linear_control.acceleration as f32)
-            }
-            MsgId::AngularP => {
-                Msg::AngularP(self.angular_control.pid.p_gain as f32)
-            }
-            MsgId::AngularI => {
-                Msg::AngularI(self.angular_control.pid.i_gain as f32)
-            }
-            MsgId::AngularD => {
-                Msg::AngularD(self.angular_control.pid.d_gain as f32)
-            }
-            MsgId::AngularAcc => {
-                Msg::AngularAcc(self.angular_control.acceleration as f32)
-            }
+            MsgId::LinearP => Msg::LinearP(self.linear_control.pid.p_gain as f32),
+            MsgId::LinearI => Msg::LinearI(self.linear_control.pid.i_gain as f32),
+            MsgId::LinearD => Msg::LinearD(self.linear_control.pid.d_gain as f32),
+            MsgId::LinearAcc => Msg::LinearAcc(self.linear_control.acceleration as f32),
+            MsgId::AngularP => Msg::AngularP(self.angular_control.pid.p_gain as f32),
+            MsgId::AngularI => Msg::AngularI(self.angular_control.pid.i_gain as f32),
+            MsgId::AngularD => Msg::AngularD(self.angular_control.pid.d_gain as f32),
+            MsgId::AngularAcc => Msg::AngularAcc(self.angular_control.acceleration as f32),
 
-            MsgId::At => Msg::At(ArrayVec::new())
+            MsgId::At => Msg::At(ArrayVec::new()),
         }
     }
 }

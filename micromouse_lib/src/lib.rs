@@ -18,14 +18,14 @@ pub const CONFIG2019: Config = Config {
     },
 
     linear_motion: MotionControl {
-        p: 1.0,
+        p: 0.01,
         i: 0.0,
         d: 0.0,
         acc: 1.0,
     },
 
     angular_motion: MotionControl {
-        p: 1.0,
+        p: 0.01,
         i: 0.0,
         d: 0.0,
         acc: 1.0,
@@ -79,8 +79,7 @@ pub struct Mouse {
 
 impl Mouse {
     pub fn ticks_per_mm(&self) -> f32 {
-        (self.ticks_per_rev * self.gearbox_ratio)
-            / (self.wheel_diameter * f32::consts::PI)
+        (self.ticks_per_rev * self.gearbox_ratio) / (self.wheel_diameter * f32::consts::PI)
     }
 
     pub fn ticks_to_mm(&self, ticks: f32) -> f32 {

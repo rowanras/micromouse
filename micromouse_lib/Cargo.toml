@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 pid_control = { git = "https://github.com/mbr/pid_control-rs" }
+micromath = "0.3.1"
 
 [dependencies.num-traits]
 version = "0.2.0"
