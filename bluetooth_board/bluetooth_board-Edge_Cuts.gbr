@@ -1,0 +1,23 @@
+G04 #@! TF.GenerationSoftware,KiCad,Pcbnew,5.1.4*
+G04 #@! TF.CreationDate,2019-09-26T11:05:18-04:00*
+G04 #@! TF.ProjectId,bluetooth_board,626c7565-746f-46f7-9468-5f626f617264,rev?*
+G04 #@! TF.SameCoordinates,PX8442660PY5f8f9f8*
+G04 #@! TF.FileFunction,Profile,NP*
+%FSLAX46Y46*%
+G04 Gerber Fmt 4.6, Leading zero omitted, Abs format (unit mm)*
+G04 Created by KiCad (PCBNEW 5.1.4) date 2019-09-26 11:05:18*
+%MOMM*%
+%LPD*%
+G04 APERTURE LIST*
+%ADD10C,0.050000*%
+G04 APERTURE END LIST*
+D10*
+X0Y0D02*
+X0Y14859000D01*
+X11049000Y0D02*
+X0Y0D01*
+X11049000Y14859000D02*
+X11049000Y0D01*
+X0Y14859000D02*
+X11049000Y14859000D01*
+M02*

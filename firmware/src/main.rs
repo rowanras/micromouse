@@ -33,6 +33,7 @@ pub mod plan;
 pub mod time;
 pub mod uart;
 pub mod vl6180x;
+pub mod mouse;
 
 use core::fmt::Write;
 use core::str;
@@ -212,27 +213,9 @@ fn main() -> ! {
     }
 
     let config = BotConfig {
-        left_p: 2000.0,
-        left_i: 4.0,
-        left_d: 15000.0,
-        right_p: 2000.0,
-        right_i: 4.0,
-        right_d: 15000.0,
-        spin_p: 0.01,
-        spin_i: 0.0,
-        spin_d: 0.0,
-        spin_err: 15.0,
-        spin_settle: 50,
-        linear_p: 0.0185,
-        linear_i: 0.0,
-        linear_d: 0.1,
-        linear_spin_p: 0.015,
-        linear_spin_i: 0.000000002,
-        linear_spin_d: 0.0,
-        linear_spin_pos_p: 2.0,
-        linear_err: 10.0,
-        linear_front_err: 5.0,
-        linear_settle: 50,
+        path_p: 1.0,
+        path_i: 0.0,
+        path_d: 0.0,
         ticks_per_spin: 2064.03,
         ticks_per_cell: 1620.0,
         cell_width: 180.0,
